@@ -217,7 +217,7 @@
 
         <div class="overlay" id="lbOverlay">
           <div class="lb-card">
-            <h2>🏆 全服排行榜</h2>
+            <h2 id="lbTitle">🏆 全服排行榜</h2>
             <div class="lb-list" id="lbList"><div class="lb-empty">加载中…</div></div>
             <button class="btn ghost" id="lbClose">关闭</button>
           </div>
@@ -392,6 +392,7 @@ function gameOver(){
   $overlay.classList.add('show');
   submitted=false; $submitTip.textContent=""; $submitScoreBtn.disabled=false;
   $nameInput.value = localStorage.getItem('watermelon_name')||"";
+  if(score>0) lbLocalAdd($nameInput.value||"本机玩家", score); // 自动记入本机纪录榜
   if(score>best){ best=score; try{localStorage.setItem('watermelon_best',best);}catch(e){} $best.textContent=best; }
 }
 function dropPending(){
@@ -568,7 +569,7 @@ const LB_KEY  = "sb_publishable_cELF0q8W_y6pqqlnNH0gcA_uzIEeR06";  // anon publi
 
 const $lbOverlay=document.getElementById('lbOverlay'), $lbList=document.getElementById('lbList'),
       $nameInput=document.getElementById('nameInput'), $submitTip=document.getElementById('submitTip'),
-      $submitScoreBtn=document.getElementById('submitScoreBtn');
+      $submitScoreBtn=document.getElementById('submitScoreBtn'), $lbTitle=document.getElementById('lbTitle');
 let submitted=false;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const lbReady=()=>!!(LB_BASE&&LB_KEY);
@@ -609,10 +610,12 @@ async function openLb(){
   $lbOverlay.classList.add('show');
   const local=lbLocalGet();
   if(!lbReady()){
+    $lbTitle.textContent="📱 本机纪录榜";
     $lbList.innerHTML='<div class="lb-empty">云端排行榜配置中<br>当前为本机纪录模式</div>'+
       (local.length?rowsHtml(local):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>');
     return;
   }
+  $lbTitle.textContent="🏆 全服排行榜";
   $lbList.innerHTML='<div class="lb-empty">加载中…</div>';
   try{
     const res=await fetchT(LB_BASE+'/score?select=name,score&order=score.desc&limit=10',{headers:lbHeaders()});
@@ -621,6 +624,7 @@ async function openLb(){
     if(!data.length){ $lbList.innerHTML='<div class="lb-empty">还没有人上榜<br>快来抢第一吧！</div>'; return; }
     $lbList.innerHTML=rowsHtml(data);
   }catch(e){ // 云端不可达 → 降级本机榜
+    $lbTitle.textContent="📱 本机纪录榜";
     $lbList.innerHTML=(local.length?rowsHtml(local):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
       '<div class="lb-empty">（云端不可用：'+lbErr(e)+'，显示本机纪录）</div>';
   }
