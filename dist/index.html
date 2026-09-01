@@ -130,7 +130,15 @@
     box-shadow:0 16px 40px rgba(62,74,54,.18);
     display:flex; flex-direction:column; gap:12px; overflow:hidden;
   }
-  .lb-list{flex:1; overflow:auto; display:flex; flex-direction:column; gap:6px; min-height:120px; padding:2px;}
+  .lb-list{
+    flex:1; overflow-y:auto; max-height:52vh; display:flex; flex-direction:column; gap:6px;
+    min-height:120px; padding:2px 8px 2px 2px;
+    scrollbar-width:thin; scrollbar-color:rgba(127,168,107,.55) transparent;
+  }
+  .lb-list::-webkit-scrollbar{width:8px;}
+  .lb-list::-webkit-scrollbar-track{background:rgba(127,168,107,.1); border-radius:8px;}
+  .lb-list::-webkit-scrollbar-thumb{background:rgba(127,168,107,.45); border-radius:8px;}
+  .lb-list::-webkit-scrollbar-thumb:hover{background:rgba(127,168,107,.7);}
   .lb-card h2{
     font-size:22px; font-weight:700; letter-spacing:2px;
     color:var(--ink); text-shadow:none; margin:0;
@@ -155,6 +163,10 @@
   .lb-row.top2 .lb-score{color:#6B7883;}
   .lb-row.top3 .lb-score{color:#8C5730;}
   .lb-row.me{outline:1.5px dashed var(--sage); background:rgba(127,168,107,.16);}
+  .lb-tag{
+    flex:0 0 auto; font-size:10px; line-height:1; color:#F6F8EF;
+    background:var(--sage); border-radius:8px; padding:3px 7px; letter-spacing:.06em;
+  }
   .lb-my-sep{font-size:12px; color:var(--sub); text-align:center; padding:7px 0 1px; border-top:1px solid rgba(127,168,107,.28);}
   .lb-name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .lb-score{font-weight:700; color:var(--ink);}
@@ -638,12 +650,23 @@ const lbRowHtml=(it,rank,isMe=false)=>
     ? '<span class="lb-rank">'+crownSvg(rank)+'<i>'+rank+'</i></span>'
     : '<span class="lb-rank">'+rank+'</span>')+
   '<span class="lb-name">'+esc(it.name||'神秘玩家')+'</span>'+
+  (isMe?'<span class="lb-tag">本次</span>':'')+
   '<span class="lb-score">'+it.score+'</span></div>';
 const rowsHtml=(items,my=null)=>items.map(it=>{
   const rank=1+items.filter(x=>Number(x.score)>Number(it.score)).length;
   const isMe=!!my && it.name===my.name && Number(it.score)===Number(my.score);
   return lbRowHtml(it,rank,isMe);
 }).join('');
+const inItems=(my,items)=>!!my && items.some(it=>it.name===my.name && Number(it.score)===Number(my.score));
+const myLocalRankHtml=(my,local)=>{ // 本机榜：我的纪录不在可见行时，补一条我的名次
+  if(!my) return '';
+  const rank=1+local.filter(x=>Number(x.score)>Number(my.score)).length;
+  return '<div class="lb-my-sep">我的排名</div>'+lbRowHtml(my,rank,true);
+};
+const scrollToMe=()=>{ // 打开榜单后自动定位到"本次"那一行
+  const el=$lbList.querySelector('.lb-row.me');
+  if(el) $lbList.scrollTop=el.offsetTop-$lbList.clientHeight/2+el.offsetHeight/2;
+};
 const myCloudRankHtml=async(my,items)=>{
   if(!my || my.source==='local' || items.some(it=>it.name===my.name && Number(it.score)===Number(my.score))) return '';
   try{
@@ -690,8 +713,11 @@ async function openLb(){
   const my=lbLastGet();
   if(!lbReady()){
     $lbTitle.textContent="📱 本机纪录榜";
+    const mySrc=my&&my.source==='local'?my:null;
     $lbList.innerHTML='<div class="lb-empty">云端排行榜配置中<br>当前为本机纪录模式</div>'+
-      (local.length?rowsHtml(local,my&&my.source==='local'?my:null):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>');
+      (local.length?rowsHtml(local,mySrc):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
+      (mySrc&&!inItems(mySrc,local)?myLocalRankHtml(mySrc,local):'');
+    scrollToMe();
     return;
   }
   $lbTitle.textContent="🏆 全服排行榜";
@@ -702,10 +728,14 @@ async function openLb(){
     const data=await res.json();
     const topHtml=data.length?rowsHtml(data,my):'<div class="lb-empty">还没有人上榜<br>快来抢第一吧！</div>';
     $lbList.innerHTML=topHtml+await myCloudRankHtml(my,data);
+    scrollToMe();
   }catch(e){ // 云端不可达 → 降级本机榜
     $lbTitle.textContent="📱 本机纪录榜";
-    $lbList.innerHTML=(local.length?rowsHtml(local,my&&my.source==='local'?my:null):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
+    const mySrc=my&&my.source==='local'?my:null;
+    $lbList.innerHTML=(local.length?rowsHtml(local,mySrc):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
+      (mySrc&&!inItems(mySrc,local)?myLocalRankHtml(mySrc,local):'')+
       '<div class="lb-empty">（云端不可用：'+lbErr(e)+'，显示本机纪录）</div>';
+    scrollToMe();
   }
 }
 async function onSubmitScore(){
