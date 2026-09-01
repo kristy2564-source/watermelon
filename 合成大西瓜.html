@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>合成大西瓜 · 网页小游戏</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg1:#F6F8EF; --bg2:#E7F0DD;
+    --card:#FCFDF8;
+    --ink:#3E4A36; --sub:#8A9A78; --body:#5E6B52;
+    --sage:#7FA86B; --sage-d:#5E8A4E; --peach:#E7A17C; --terra:#C97A63;
+    --green:#3FBF5B; --green-d:#2E9E47; --orange:#FF9F45; --danger:#E08A7A;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:"Noto Serif SC","Songti SC","SimSun",serif;
+    background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    color:var(--ink); display:flex; justify-content:center; align-items:flex-start;
+    padding:24px 16px 40px; min-height:100vh; overflow-x:hidden;
+  }
+  .app{width:100%; max-width:980px;}
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(252,253,248,.82); border:1.5px solid var(--sage);
+    border-radius:18px; padding:14px 28px; margin-bottom:22px;
+    box-shadow:0 6px 18px rgba(62,74,54,.12);
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .top-actions{display:flex; align-items:center; gap:10px;}
+  .brand .emoji{font-size:34px;}
+  .brand h1{font-size:26px; font-weight:700; letter-spacing:1px;}
+  .btn{
+    border:1.5px solid var(--sage-d); cursor:pointer; font-family:inherit; font-weight:700; color:#fff;
+    background:var(--sage); border-radius:999px; padding:11px 22px; font-size:15px;
+    box-shadow:0 4px 12px rgba(94,138,78,.32); transition:transform .12s ease, filter .12s ease;
+  }
+  .btn:hover{filter:brightness(1.05);} .btn:active{transform:scale(.96);}
+  .btn.ghost{background:var(--card); color:var(--ink); border:1.5px solid var(--sage); box-shadow:none;}
+  main{display:flex; gap:34px; justify-content:center; align-items:flex-start; flex-wrap:wrap;}
+  .stage-decor{position:relative; padding:72px 72px 82px;}
+  .stage-frame{
+    position:absolute; inset:0; width:100%; height:100%;
+    z-index:2; pointer-events:none;
+    filter: drop-shadow(0 2px 4px rgba(62,74,54,.10));
+  }
+  .stage-wrap{
+    position:relative; z-index:1; background:var(--card); border-radius:30px; padding:18px;
+    box-shadow:0 12px 30px rgba(62,74,54,.14);
+  }
+  canvas{display:block; border-radius:20px; background:#F4F8EE; touch-action:none; cursor:pointer;}
+  .panel{width:300px; display:flex; flex-direction:column; gap:14px;}
+  .card{background:var(--card); border:1.5px solid rgba(127,168,107,.55); border-radius:18px; padding:16px 18px; box-shadow:0 8px 20px rgba(62,74,54,.10);}
+  .card .lbl{font-size:13px; color:var(--sub); font-weight:600; letter-spacing:1px;}
+  .score-num{font-family:"Noto Serif SC","Songti SC",serif; font-size:40px; font-weight:700; line-height:1.1; color:var(--ink);}
+  .best-num{font-family:"Noto Serif SC","Songti SC",serif; font-size:30px; font-weight:700; color:var(--peach);}
+  .next-row{display:flex; align-items:center; justify-content:space-between;}
+  .next-row .name{font-size:15px; font-weight:700;}
+  .next-box{width:48px; height:48px; position:relative;}
+  .next-box canvas{width:100%; height:100%; display:block; border-radius:0; background:transparent;}
+  .rules .rt{font-size:14px; font-weight:700; margin-bottom:8px;}
+  .rules p{font-size:13px; color:var(--body); line-height:1.7; margin:2px 0;}
+  .rules .hi{color:var(--danger); font-weight:700;}
+  .panel .btn{width:100%; padding:14px; font-size:16px;}
+  footer{
+    margin-top:26px; background:var(--card); border-radius:24px; padding:22px 26px;
+    box-shadow:0 8px 20px rgba(115,76,64,.10);
+  }
+  .footer-title{font-size:18px; font-weight:800; margin-bottom:4px;}
+  .footer-sub{font-size:13px; color:var(--sub); margin-bottom:16px;}
+  .chain{display:flex; align-items:center; flex-wrap:wrap; gap:6px 4px;}
+  .unit{display:flex; flex-direction:column; align-items:center; gap:5px; width:62px;}
+  .unit canvas{width:42px; height:42px; display:block;}
+  .unit .nm{font-size:11px; color:var(--body); text-align:center; line-height:1.2;}
+  .arrow{color:var(--sage-d); font-weight:700; font-size:16px; flex:0 0 auto;}
+  .overlay{
+    position:absolute; inset:18px; border-radius:20px; background:rgba(62,74,54,.86);
+    display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:#F6F8EF; text-align:center; z-index:12;
+  }
+  .overlay.show{display:flex;}
+  .overlay h2{font-size:30px; font-weight:700; color:#F6F8EF; letter-spacing:2px;}
+  .overlay .final{font-size:18px; opacity:.92;}
+  .overlay .final b{font-size:30px; color:var(--peach);}
+  .hint{font-size:12px; color:var(--sub); text-align:center; margin-top:8px;}
+
+  /* ===== 穆夏风 · 初始引导弹窗 ===== */
+  .start-overlay{
+    position:absolute; inset:18px; border-radius:20px; z-index:13;
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    padding:28px;
+    background:linear-gradient(160deg, rgba(246,248,239,.93), rgba(231,240,221,.93));
+    backdrop-filter:blur(2px);
+  }
+  .start-overlay.show{display:flex;}
+  .start-card{
+    width:min(360px, 88%); background:var(--card);
+    border:1.5px solid var(--sage); border-radius:24px; padding:30px 30px 26px;
+    box-shadow:0 16px 40px rgba(62,74,54,.18);
+    display:flex; flex-direction:column;  align-items:center; gap:14px; position:relative;
+  }
+  .start-flower{ width:86px; height:auto; margin-bottom:2px; }
+  .start-card h2{font-size:28px; font-weight:700; letter-spacing:2px; color:var(--ink);}
+  .start-sub{font-size:13px; color:var(--sub); letter-spacing:1px; margin-top:-6px;}
+  .start-guide{
+    font-size:13px; color:var(--body); line-height:1.95; text-align:left;
+    background:rgba(127,168,107,.10); border-radius:14px; padding:12px 16px;
+  }
+  .start-guide .hi{color:var(--danger); font-weight:700;}
+  .start-card .btn{margin-top:4px; font-size:17px; padding:13px 36px;}
+
+  /* ===== 排行榜 ===== */
+  .submit-row{display:flex; gap:8px; width:min(260px,80%);}
+  .name-input{
+    flex:1; min-width:0; font:inherit; font-size:14px; color:var(--ink);
+    background:#fff; border:1.5px solid var(--sage); border-radius:12px;
+    padding:10px 12px; outline:none; text-align:center;
+  }
+  .name-input:focus{border-color:var(--sage-d,#5E8A4E); box-shadow:0 0 0 3px rgba(127,168,107,.18);}
+  .submit-row .btn{padding:10px 16px; font-size:14px;}
+  .submit-row .btn:disabled{opacity:.55; cursor:default;}
+  .submit-tip{font-size:12px; color:var(--sub); min-height:16px; margin-top:-6px;}
+  .lb-card{
+    width:min(320px,86%); max-height:82%; background:var(--card);
+    border:1.5px solid var(--sage); border-radius:24px; padding:22px 20px 18px;
+    box-shadow:0 16px 40px rgba(62,74,54,.18);
+    display:flex; flex-direction:column; gap:12px; overflow:hidden;
+  }
+  .lb-list{flex:1; overflow:auto; display:flex; flex-direction:column; gap:6px; min-height:120px; padding:2px;}
+  .lb-row{
+    display:flex; align-items:center; gap:10px; font-size:14px; color:var(--body);
+    background:rgba(127,168,107,.08); border-radius:12px; padding:8px 12px;
+  }
+  .lb-rank{width:24px; font-weight:700; color:var(--sage); text-align:center;}
+  .lb-row.top1 .lb-rank{color:#C9962E;}
+  .lb-row.top2 .lb-rank{color:#8C9BA8;}
+  .lb-row.top3 .lb-rank{color:#B0764F;}
+  .lb-row.me{outline:1.5px dashed var(--sage); background:rgba(127,168,107,.16);}
+  .lb-name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .lb-score{font-weight:700; color:var(--ink);}
+  .lb-empty{font-size:13px; color:var(--sub); text-align:center; padding:26px 8px; line-height:1.8;}
+
+  /* ===== 响应式：窄屏（手机）适配 ===== */
+  @media (max-width:680px){
+    body{padding:14px 10px 28px;}
+    .app{max-width:100%;}
+    header{padding:10px 16px; margin-bottom:14px; border-radius:14px;}
+    header .btn{padding:9px 13px; font-size:13px;}
+    .top-actions{gap:6px;}
+    .brand{gap:8px;}
+    .brand .emoji{font-size:26px;}
+    .brand h1{font-size:20px;}
+    .btn{padding:9px 16px; font-size:14px;}
+    main{gap:16px;}
+    .stage-decor{padding:32px 32px 38px;}
+    .stage-wrap{padding:12px; border-radius:22px; margin:0 auto;}
+    .panel{width:100%; max-width:440px; margin:0 auto;}
+    .card{padding:13px 15px; border-radius:15px;}
+    .score-num{font-size:34px;}
+    .best-num{font-size:26px;}
+    .panel .btn{padding:13px; font-size:15px;}
+    footer{border-radius:18px; padding:16px 18px; margin-top:18px;}
+    .footer-title{font-size:16px;}
+    .unit{width:54px;}
+    .unit canvas{width:38px; height:38px;}
+    .unit .nm{font-size:10px;}
+  }
+  @media (max-width:380px){
+    .brand h1{font-size:18px;}
+    .unit{width:48px;}
+    .unit canvas{width:34px; height:34px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><span class="emoji">🍉</span><h1>合成大西瓜</h1></div>
+    <div class="top-actions">
+      <button class="btn ghost" id="lbBtn">🏆 排行榜</button>
+      <button class="btn ghost" id="restartTop">重新开始</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="stage-decor">
+      <img class="stage-frame" src="assets/frame_ring_sage.svg" alt="" onerror="this.style.display='none'" />
+      <div class="stage-wrap">
+        <canvas id="game" width="440" height="600"></canvas>
+        <div class="overlay" id="overlay">
+          <h2>游戏结束</h2>
+          <div class="final">本局得分 <b id="finalScore">0</b></div>
+          <div class="submit-row">
+            <input id="nameInput" class="name-input" maxlength="12" placeholder="输入昵称上榜">
+            <button class="btn" id="submitScoreBtn">上传成绩</button>
+          </div>
+          <div class="submit-tip" id="submitTip"></div>
+          <button class="btn" id="restartBtn">再来一局</button>
+        </div>
+
+        <div class="start-overlay show" id="startOverlay">
+          <div class="start-card">
+            <img class="start-flower" src="assets/flower_clematis.svg" alt="铁线莲装饰">
+            <h2>合成大西瓜</h2>
+            <div class="start-guide">
+              • 移动鼠标 / 手指瞄准落点，点击放下水果<br>
+              • 相同两个水果相撞，会合成更大的下一阶<br>
+              • 一路合成到大西瓜即可封顶得分<br>
+              <span class="hi">• 水果堆过顶部危险线即结束，挑战极限吧！</span>
+            </div>
+            <button class="btn" id="startBtn2">开始游戏</button>
+          </div>
+        </div>
+
+        <div class="overlay" id="lbOverlay">
+          <div class="lb-card">
+            <h2>🏆 全服排行榜</h2>
+            <div class="lb-list" id="lbList"><div class="lb-empty">加载中…</div></div>
+            <button class="btn ghost" id="lbClose">关闭</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="card">
+        <div class="lbl">当前分数</div>
+        <div class="score-num" id="score">0</div>
+      </div>
+      <div class="card">
+        <div class="lbl">最高分</div>
+        <div class="best-num" id="best">0</div>
+      </div>
+      <div class="card next-row">
+        <span class="name">下一颗</span>
+        <div class="next-box"><canvas id="nextCv" width="96" height="96"></canvas></div>
+      </div>
+      <div class="card rules">
+        <div class="rt">玩法说明</div>
+        <p>• 移动鼠标 / 手指瞄准落点，点击放下水果</p>
+        <p>• 相同的两个水果相撞会合成更大的水果</p>
+        <p>• 水果堆到危险线以上即游戏结束</p>
+        <p class="hi">• 合成大西瓜可得最高分！</p>
+      </div>
+      <button class="btn" id="startBtn">开始游戏</button>
+      <div class="hint">提示：键盘 ← → 微调落点 · 水果落地后会沿斜堆缓缓滚下</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-title">🍉 水果进化链路</div>
+    <div class="footer-sub">相同水果相撞，合成更大的下一阶，分数越来越高</div>
+    <div class="chain" id="chain"></div>
+  </footer>
+</div>
+
+<script>
+const NAMES = ["樱桃","草莓","葡萄","橘子","柠檬","青苹果","桃子","菠萝","哈密瓜","西瓜"];
+const RADII = [16,21,27,33,39,45,52,54,68,78];
+const SCORES= [1,3,6,10,15,21,28,36,45,55];
+const W=440, H=600, DANGER_Y=96, TOP_Y=48;
+
+/* ===== 水果图标：Twemoji 公开 SVG（MIT 协议，可免费用于商业/非商业用途）
+   樱桃 / 草莓 / 葡萄 / 橘子 / 柠檬 / 青苹果 / 桃子 / 菠萝 / 哈密瓜 / 西瓜
+   内联 SVG 字符串 → Blob → Image，运行时异步加载；单文件 HTML 完全自包含、无外部请求 */
+const FRUIT_SVG = [
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#77B255" d="M25.999 24c-.198 0-.397-.059-.572-.181-6.543-4.58-12.166-12.366-15.397-17.439 1.699 10.528.997 16.458.962 16.744-.068.548-.562.93-1.115.868-.548-.068-.937-.567-.869-1.115.009-.079.936-8.033-1.986-21.668-.105-.487.166-.978.634-1.148.466-.172.991.028 1.226.468.079.148 8.007 14.873 17.691 21.652.453.316.562.94.246 1.392-.194.279-.504.427-.82.427z"/><path fill="#5C913B" d="M26.547 8.818c-3.476.96-5.051 2.546-10.749.667-4.72-1.557-7.037-4.207-6.345-6.305.692-2.098 3.18-3.163 7.9-1.606 4.749 1.567 4.123 3.466 9.194 7.244z"/><circle fill="#BE1931" cx="26" cy="28" r="8"/><circle fill="#BE1931" cx="11" cy="28" r="8"/></svg>`,
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#BE1931" d="M22.614 34.845c3.462-1.154 6.117-3.034 6.12-9.373C28.736 21.461 33 17 32.999 12.921 32.998 9 28.384 2.537 17.899 3.635 7.122 4.764 3 8 2.999 15.073c0 4.927 5.304 8.381 8.127 13.518C13 32 18.551 38.187 22.614 34.845z"/><path fill="#77B255" d="M26.252 3.572c-1.278-1.044-3.28-1.55-5.35-1.677.273-.037.542-.076.82-.094.973-.063 3.614-1.232 1.4-1.087-.969.063-1.901.259-2.837.423.237-.154.479-.306.74-.442C21 0 17 0 14.981 1.688 14.469 1.576 14 1 11 1c-2 0-4.685.926-3 1 .917.041 2 0 1.858.365C9.203 2.425 6 3 6 4c0 .353 2.76-.173 3 0-1.722.644-3 2-3 3 0 .423 2.211-.825 3-1-1 1-1.4 1.701-1.342 2.427.038.475 2.388-.09 2.632-.169.822-.27 3.71-1.258 4.6-2.724.117.285 2.963 1.341 4.11 1.466.529.058 2.62.274 2.141-.711C21 6 20 5 19.695 4.025c.446-.019 8.305.975 6.557-.453z"/><path fill="#F4ABBA" d="M9.339 17.306c-.136-1.46-2.54-3.252-2.331-1 .136 1.46 2.54 3.252 2.331 1zm7.458.553c-.069-.622-.282-1.191-.687-1.671-.466-.55-1.075-.362-1.234.316-.187.799.082 1.752.606 2.372l.041.048c-.213-.525-.427-1.05-.642-1.574l.006.047c.071.64.397 1.73 1.136 1.906.754.182.826-.988.774-1.444zm5.752-4.841c.476-.955.17-3.962-.831-1.954-.476.954-.171 3.962.831 1.954zm7.211-1.457c-.03-.357-.073-.78-.391-1.01-1.189-.858-2.381 2.359-1.385 3.08.02.012.036.025.055.039l-.331-.919c0 .018.001.035.003.052.049.564.376 1.377 1.084.948.667-.406 1.028-1.444.965-2.19zm-1.345 8.567c1.016-1.569-.545-3.451-1.78-1.542-1.016 1.568.546 3.45 1.78 1.542zm-5.748 2.894c.173-1.938-2.309-2.752-2.51-.496-.173 1.938 2.309 2.752 2.51.496zm-9.896-1.212l-.049.004 1.362.715c-.006-.004-.011-.011-.018-.017-.306-.28-1.353-1.083-1.788-.592-.44.497.498 1.421.804 1.703.342.314.928.763 1.429.73 1.437-.093-.783-2.605-1.74-2.543zm13.227 5.907c.969-1.066.725-4.05-.798-2.376-.969 1.066-.724 4.05.798 2.376zM12.599 13.753c.093-.005.187-.012.28-.019.703-.046 1.004-1.454 1.042-1.952.044-.571-.043-1.456-.785-1.407l-.281.019c-.702.047-1.004 1.454-1.042 1.952-.044.571.044 1.457.786 1.407zm7.846 15.257c.395.764.252 1.623-.32 1.919s-1.357-.081-1.753-.844c-.395-.764-.252-1.623.32-1.919.573-.296 1.357.081 1.753.844z"/></svg>`,
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#77B255" d="M9.999 12c-.15 0-.303-.034-.446-.106-4.38-2.19-7.484-7.526-8.501-10.578C.876.792 1.16.226 1.684.051c.525-.176 1.091.109 1.265.632.877 2.632 3.688 7.517 7.499 9.422.494.247.694.848.447 1.342-.176.351-.529.553-.896.553z"/><circle fill="#553788" cx="19" cy="29" r="7"/><circle fill="#9266CC" cx="10" cy="15" r="7"/><circle fill="#AA8DD8" cx="19" cy="12" r="7"/><circle fill="#744EAA" cx="27" cy="18" r="7"/><circle fill="#744EAA" cx="9" cy="26" r="7"/><circle fill="#9266CC" cx="18" cy="21" r="7"/><circle fill="#9266CC" cx="29" cy="29" r="7"/></svg>`,
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#F4900C" d="M3 19.5C3 10.388 10.387 3 19.499 3c9.113 0 16.5 7.387 16.5 16.5S28.612 36 19.499 36C10.387 36 3 28.613 3 19.5z"/><path fill="#662113" d="M11.414 7.585c-.267-.267-.797-.197-1.355.12-3.3-2.732-8.653-3.692-8.895-3.692-.546-.089-1.059.277-1.15.821-.091.544.276 1.06.821 1.151.053.009 4.934.854 7.821 3.16-.275.525-.324 1.015-.07 1.268.39.391 1.34.074 2.121-.707.781-.78 1.097-1.73.707-2.121z"/><path fill="#5C913B" d="M21 1s-3.106 4.318-7.021 5.273C11 7 7.041 7.07 6.646 6.15c-.394-.919 1.572-3.937 4.969-5.393C15.012-.698 21 1 21 1z"/></svg>`,
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#5C913B" d="M11.405 3.339c6.48-1.275 8.453 1.265 11.655.084 3.202-1.181.093 2.82-.745 3.508-.84.688-8.141 4.809-11.307 3.298-3.166-1.511-3.182-6.186.397-6.89z"/><path fill="#77B255" d="M15.001 16c-.304 0-.605-.138-.801-.4-.687-.916-1.308-1.955-1.965-3.056C9.967 8.749 7.396 4.446.783 2.976c-.539-.12-.879-.654-.759-1.193.12-.54.654-.878 1.193-.759C8.671 2.68 11.599 7.581 13.952 11.519c.63 1.054 1.224 2.049 1.848 2.881.332.442.242 1.069-.2 1.4-.18.135-.39.2-.599.2z"/><path fill="#FFCC4D" d="M34.3 31.534c.002-.017-.003-.028-.003-.043 2.774-5.335 2.647-15.113-3.346-21.107-5.801-5.8-13.68-5.821-18.767-4.067-1.579.614-2.917.066-3.815.965-.881.881-.351 2.719-.714 3.819-3.169 5.202-3.405 13.025 2.688 19.117 4.962 4.962 10.438 6.842 19.98 4.853.002-.002.005-.001.008-.002 1.148-.218 2.95.523 3.566-.094 1.085-1.085.309-2.358.403-3.441z"/><path fill="#77B255" d="M8.208 6.583s-4.27-.59-6.857 4.599c-2.587 5.188.582 9.125.29 12.653-.293 3.53 1.566 1.265 2.621-.445s4.23-4.895 4.938-9.269c.707-4.376-.07-6.458-.992-7.538z"/></svg>`,
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#77B255" d="M24 7c-3 0-3 1-6 1s-3-1-6-1c-4 0-9 2-9 9 0 11 6 20 10 20 3 0 3-1 5-1s2 1 5 1c4 0 10-9 10-20 0-7.001-5-9-9-9z"/><path fill="#3E721D" d="M17.311 7.88s-1.775-4.674-6.58-6.06c-3.843-1.108-6.318.26-6.318.26s3.012 3.991 5.895 4.822c2.882.83 7.003.978 7.003.978z"/><path fill="#662113" d="M18 10c-.552 0-1-.448-1-1 0-3.441 1.2-6.615 3.293-8.707.391-.391 1.023-.391 1.414 0s.391 1.024 0 1.414C19.986 3.427 19 6.085 19 9c0 .552-.448 1-1 1z"/></svg>`,
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#5C913B" d="M1.062 5.125s4.875-5 10-5C17.188.125 19 5.062 19 5.062s.625-4 5-4 6.938 3.125 6.938 3.125-3.562 2.125-4.625 2.562c-2.801 1.153-11.375 3.562-15.375 2.562S1.062 5.125 1.062 5.125z"/><path fill="#FF886C" d="M18 6s1.042-.896 6-.896c6.542 0 12 4.812 12 12.927 0 11.531-14.958 17.881-14.958 17.881S1 34.833 1 17.977C1 8.018 7.75 5 12 5c4.958 0 6 1 6 1z"/><path fill="#77B255" d="M1.062 5.125s4.875-5 10-5C17.188.125 19 5.062 19 5.062s-4.062 5.25-8.062 4.25-9.876-4.187-9.876-4.187z"/><path fill="#DD2E44" d="M22.999 30c-.19 0-.383-.055-.554-.168-.46-.307-.584-.927-.277-1.387C22.183 28.423 24 25.538 24 19c0-6.445-4.578-10.182-4.625-10.219-.431-.345-.501-.974-.156-1.405.346-.431.975-.501 1.406-.156C20.844 7.395 26 11.604 26 19c0 7.22-2.079 10.422-2.168 10.555-.192.289-.51.445-.833.445z"/></svg>`,
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#5C913B" d="M18.241 9.633c-.277-3.307 2.17-4.72 2.17-4.72-3.199.113-4.894 2.826-4.894 2.826-.752-1.3.946-4.012 2.169-4.719-3.198.113-3.67 2.12-3.67 2.12-1.503-2.601-1.03-4.607-1.03-4.607-1.121.647-1.767 2.113-2.141 3.512l-2.318-2.67c-.23 1.044.157 3.174.573 4.959-3.055-1.79-5.903-.15-5.903-.15 3.95 1.188 5.45 3.788 5.45 3.788s-3.948-1.187-5.646 1.526c2.597-.092 4.5.499 5.856 1.23-1.163.289-3.145-.236-4.355 1.371 0 0 3.198-.113 3.851 1.055-2.172.614-3.575 2.251-3.575 2.251 4.422-.818 9.123 1.669 9.123 1.669l6.119-3.532c-1.029-4.607 2.642-6.727 2.642-6.727-2.724-1.895-4.421.818-4.421.818z"/><path fill="#FFAC33" d="M29.56 22.88c2.488 4.309 1.218 9.7-2.837 12.041-4.055 2.341-9.359.746-11.846-3.562l-1.589-2.753c-2.488-4.31-1.217-9.699 2.837-12.04 4.055-2.341 9.359-.747 11.846 3.562l1.589 2.752z"/><path fill="#FFCC4D" d="M30.562 25.364c-.209-.848-.54-1.685-1.002-2.484l-.186-.323v.001l-1.951-.828.624-1.471-.075-.131c-2.025-3.51-5.92-5.217-9.486-4.466l-.818 1.926-1.884-.8c-3.28 2.122-4.567 6.319-3.262 10.128l1.006.427-.401.946c.055.105.102.212.163.315l1.589 2.753c.685 1.187 1.59 2.16 2.618 2.909l.229-.538 1.951.828-.324.764c.665.277 1.357.465 2.061.572l.215-.507 1.403.595c1.144-.048 2.28-.336 3.343-.883l-.017-.007.828-1.951 1.189.504c.522-.521.973-1.104 1.334-1.736l-1.693-.72.828-1.951 1.667.707c.191-.7.301-1.427.316-2.167l-1.155-.49.828-1.951.062.029zm-6.212-7.243l1.95.829-.828 1.95-1.951-.828.829-1.951zm.294 4.731l-.828 1.95-1.951-.827.828-1.951 1.951.828zm-4.197-6.387l1.951.828-.829 1.952-1.951-.828.829-1.952zm-1.656 3.902l1.951.828-.828 1.951-1.95-.828.827-1.951zm-3.902-1.655l1.95.828-.828 1.949-1.95-.828.828-1.949zm-2.484 5.853l.828-1.952 1.951.828-.829 1.952-1.95-.828zm4.196 6.385l-1.951-.827.828-1.95 1.951.828-.828 1.95zm-.295-4.73l.829-1.951 1.951.827-.829 1.952-1.951-.828zm4.196 6.386l-1.95-.828.828-1.95 1.95.829-.828 1.949zm-.294-4.73l.828-1.952 1.951.829-.828 1.952-1.951-.829zm4.197 6.388l-1.951-.828.828-1.951 1.951.828-.828 1.951zm1.657-3.904l-1.95-.827.828-1.952 1.95.828-.828 1.951zm1.656-3.901l-1.951-.828.828-1.95 1.951.827-.828 1.951z"/></svg>`,
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#A6D388" d="M31.924 10.982c4.418 7.652 1.99 17.326-5.424 21.607-7.414 4.28-16.505 2.413-20.924-5.241C.577 18.688 3.086 9.156 10.5 4.876c7.414-4.28 17.924.044 21.424 6.106z"/><path fill="#77B255" d="M24 6c3 1 6 4 8 7 .836 1.254.729-.078-.294-2.348C28.02 4.768 17.777.675 10.5 4.876c-3.01 1.738-5.194 4.349-6.413 7.408C4.808 11.471 5.52 11 6 11c1 0-1.896 3.279 1 11 3 8 3 4 3 4s-2-9-1-12 2-5 3-4 5 9 7 14c2.259 5.647 2-1-1-8-2.841-6.628-3-8-2-8s3.465 1.464 7 5c2 2 3 5 4 6s1-1 0-4c-.707-2.121-3-6-6-8-2.496-1.664 0-2 3-1z"/><path fill="#5C913B" d="M11.934 6.358c-.479.276-1.091.112-1.367-.366-1.104-1.914-1.26-4.303-1.266-4.404-.033-.55.387-1.022.937-1.058.552-.034 1.025.385 1.061.936.001.021.137 2.027 1.001 3.525.275.479.112 1.091-.366 1.367z"/><path fill="#77B255" d="M11.961 30.533C11 30 10.234 28.557 9.552 27.308c-.682-1.249.276-1.276.886-.159.681 1.249 1.204 1.612 1.886 2.861.682 1.249.194.832-.363.523zm9.543.373c-.874-2.059-.812-3.057-1.686-5.114-.874-2.059-.749-4.055.124-1.997.874 2.059 1.748 4.118 1.687 5.115-.064.999-.125 1.996-.125 1.996zM27 19c1 3 0 2 1 5s1 5 1 0c0-3.162-1-6-2-7-1.581-1.581 0 2 0 2z"/></svg>`,
+`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 25.22"><path fill="#5c913b" d="M1.52 0C.55 2.2 0 4.61 0 7.15c0 9.98 8.32 18.07 18.58 18.07 8 0 14.8-4.92 17.42-11.81z"/><path fill="#ffe8b6" d="M3.44.75a15.6 15.6 0 0 0-1.38 6.41c0 8.87 7.4 16.06 16.52 16.06 7.13 0 13.18-4.4 15.5-10.55z"/><path fill="#dd2e44" d="M5.36 1.49c-.79 1.73-1.23 3.64-1.23 5.66 0 7.76 6.47 14.05 14.45 14.05 6.26 0 11.57-3.87 13.58-9.29z"/><path d="M9.21 7.96c-.32.47-.77.73-1 .57s-.17-.67.14-1.15.77-.73 1-.57.17.67-.14 1.15m6.19 1.03c-.32.47-.77.73-1 .57s-.17-.67.14-1.15.77-.73 1-.57.17.67-.14 1.15m5.25 4.83c.05.57-.14 1.05-.42 1.07-.28.03-.56-.41-.61-.98s.14-1.05.42-1.07c.28-.03.56.41.61.98m-9.29-2.06c.05.57-.14 1.05-.42 1.07-.28.03-.56-.41-.61-.98s.14-1.05.42-1.07c.28-.03.56.41.61.98m4.03 5.52c-.34.46-.81.68-1.03.51-.23-.17-.13-.68.21-1.13.34-.46.81-.68 1.03-.51.23.17.13.68-.21 1.13m8.3.47c.28.5.31 1.01.06 1.15s-.68-.15-.96-.64c-.28-.5-.31-1.01-.06-1.15s.68.15.96.64m-7.24-5.19c.31.48.37.99.14 1.15-.24.16-.68-.1-1-.58-.31-.48-.37-.99-.14-1.14.24-.16.68.1 1 .58Zm9.27 1.63c-.34.46-.81.68-1.03.51-.23-.17-.13-.68.21-1.13.34-.46.81-.68 1.03-.51.23.17.14.68-.21 1.13"/></svg>`,
+];
+const FRUIT_VB = [
+  {w:36,h:36,s:1.00}, // 樱桃
+  {w:36,h:36,s:1.00}, // 草莓
+  {w:36,h:36,s:1.00}, // 葡萄
+  {w:36,h:36,s:1.00}, // 橘子
+  {w:36,h:36,s:1.00}, // 柠檬
+  {w:36,h:36,s:1.00}, // 青苹果
+  {w:36,h:36,s:0.88}, // 桃子：本体偏大，视觉稍缩
+  {w:36,h:36,s:1.10}, // 菠萝：本体只占 viewBox ~50% 宽，整体放大到 1.10 让本体贴近碰撞圆；皇冠外溢作装饰叶（类苹果叶），碰撞半径同步从 60→54 让皇冠不再喧宾夺主
+  {w:36,h:36,s:1.00}, // 哈密瓜
+  {w:36,h:25.22,s:1.00} // 西瓜是切片形，viewBox 高比是 25.22/36，不是正方
+];
+const FRUIT_IMG = [];
+
+function loadFruitIcons(){
+  return Promise.all(FRUIT_SVG.map((svg, i) => new Promise(res => {
+    const blob = new Blob([svg], {type:'image/svg+xml'});
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { FRUIT_IMG[i] = img; URL.revokeObjectURL(url); res(); };
+    img.onerror = () => { URL.revokeObjectURL(url); res(); };
+    img.src = url;
+  })));
+}
+
+/* 用 Twemoji 图标等比缩放渲染水果：图标宽度按各自系数缩到 2r*s，
+   没有白色描边，相邻水果之间不再有白色缝隙。 */
+function drawFruitShape(ctx, type, r){
+  const img = FRUIT_IMG[type];
+  if(!img) return;
+  const vb = FRUIT_VB[type];
+  const s = vb.s || 1;
+  const w = 2*r * s;
+  const h = w * vb.h / vb.w;
+  ctx.drawImage(img, -w/2, -h/2, w, h);
+}
+
+loadFruitIcons().then(()=>{
+  // 图标异步加载完成后，统一补绘链路画布（脚本启动时 paintFruitTo 同步执行，那时 FRUIT_IMG 是空的，大水果图标全部丢失）
+  for(const it of chainCanvases){ paintFruitTo(it.cv, it.type); }
+});
+
+function paintFruitTo(cv, type){
+  const c = cv.getContext('2d');
+  const w = cv.width, h = cv.height;
+  c.clearRect(0,0,w,h);
+  const r = Math.min(w,h)/2 - 2;
+  c.save();
+  c.translate(w/2, h/2);
+  drawFruitShape(c, type, r);
+  c.restore();
+}
+
+/* ===== 物理引擎 ===== */
+const G=0.7, DAMP=0.998, SUBSTEPS=8, REST_GROUND=0.42, REST_BALL=0.4, GROUND_FRIC=0.9, BALL_FRIC=0.25;
+
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+
+/* 画布自适应：内部分辨率(W×H)固定，显示尺寸随屏幕宽度缩放，并按 DPR 渲染保证清晰 */
+function setupCanvas(){
+  const budget = window.innerWidth - 68;            // 减去 body 边距 + stage 内边距/边框
+  const displayW = Math.max(240, Math.min(W, budget));
+  const displayH = displayW * H / W;                // 锁定 440:600 比例
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  cv.style.width  = displayW + 'px';
+  cv.style.height = displayH + 'px';
+  cv.width  = Math.round(displayW * dpr);
+  cv.height = Math.round(displayH * dpr);
+  // 把逻辑坐标(W,H)映射到实际像素缓冲，物理与绘制无需改动
+  ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+  if(pending){ pending.x = Math.max(RADII[pending.type], Math.min(W - RADII[pending.type], pending.x)); }
+}
+/* setupCanvas() 的调用与监听已下移，避免提前访问 pending 触发 TDZ 报错 */
+
+let fruits=[], pending=null, nextType=0, score=0, best=0, running=false, over=false,  overTimer=0, effects=[], lastDropTime=-9999;
+const DROP_CD = 380; // 两次投放最小间隔(ms)，避免连点连发
+setupCanvas();
+window.addEventListener('resize', setupCanvas);
+window.addEventListener('orientationchange', () => setTimeout(setupCanvas, 200));
+const $score=document.getElementById('score'), $best=document.getElementById('best'),
+      $overlay=document.getElementById('overlay'), $final=document.getElementById('finalScore'),
+      $nextCv=document.getElementById('nextCv'), $startOverlay=document.getElementById('startOverlay');
+try{ best=parseInt(localStorage.getItem('watermelon_best')||'0',10)||0; }catch(e){}
+$best.textContent=best;
+
+let lastAimX = null;   // 记住上次瞄准的 X，落子后新水果沿用，避免回中跳变
+function weightedType(exclude){
+  const pool=[0,0,0,0,1,1,1,2,2,3,4];
+  if(exclude==null) return pool[Math.floor(Math.random()*pool.length)];
+  // 防连抽：下一颗不与当前待落水果相同，避免连续两颗一样卡死
+  let pick;
+  do { pick = pool[Math.floor(Math.random()*pool.length)]; } while(pick===exclude);
+  return pick;
+}
+function spawnPending(){
+  nextType = nextType || weightedType();
+  const t = nextType; nextType = weightedType(t);
+  pending = {x: (lastAimX!=null ? Math.max(RADII[t], Math.min(W-RADII[t], lastAimX)) : W/2), type: t};
+  paintFruitTo($nextCv, nextType);
+}
+function startGame(){
+  fruits=[]; effects=[]; score=0; over=false; overTimer=0; submitted=false;
+  $score.textContent="0"; $overlay.classList.remove('show');
+  $startOverlay.classList.remove('show');
+  $lbOverlay.classList.remove('show');
+  spawnPending(); running=true;
+}
+function gameOver(){
+  over=true; running=false;
+  $final.textContent=score;
+  $overlay.classList.add('show');
+  submitted=false; $submitTip.textContent=""; $submitScoreBtn.disabled=false;
+  $nameInput.value = localStorage.getItem('watermelon_name')||"";
+  if(score>best){ best=score; try{localStorage.setItem('watermelon_best',best);}catch(e){} $best.textContent=best; }
+}
+function dropPending(){
+  if(!pending || over) return;
+  const now = performance.now();
+  if(now - lastDropTime < DROP_CD) return; // 冷却中，忽略这次投放，避免连点连发
+  lastDropTime = now;
+  const t = pending.type;
+  fruits.push({x:pending.x, y:TOP_Y, r:RADII[t], type:t, vx:(Math.random()-0.5)*0.5, vy:1.5, merged:false});
+  spawnPending();
+}
+
+function step(){
+  if(!running) return;
+  for(let s=0;s<SUBSTEPS;s++){
+    for(const f of fruits){
+      f.vy += G/SUBSTEPS;
+      f.x  += f.vx/SUBSTEPS;
+      f.y  += f.vy/SUBSTEPS;
+    }
+    for(const f of fruits){ f.vx *= DAMP; f.vy *= DAMP; }
+    for(const f of fruits){
+      if(f.y + f.r > H){ f.y = H - f.r; if(f.vy>0) f.vy = -f.vy * REST_GROUND; f.vx *= GROUND_FRIC; }
+      if(f.x - f.r < 0){ f.x = f.r;     if(f.vx<0) f.vx = -f.vx * REST_GROUND; }
+      if(f.x + f.r > W){ f.x = W - f.r; if(f.vx>0) f.vx = -f.vx * REST_GROUND; }
+    }
+    const merges=[];
+    for(let i=0;i<fruits.length;i++){
+      const a=fruits[i]; if(a.merged) continue;
+      for(let j=i+1;j<fruits.length;j++){
+        const b=fruits[j]; if(b.merged) continue;
+        const dx=b.x-a.x, dy=b.y-a.y;
+        const d = Math.hypot(dx,dy);
+        const min = a.r + b.r;
+        if(d>0 && d<min){
+          const nx=dx/d, ny=dy/d;
+          const overlap = min - d;
+          const ma = a.r*a.r, mb = b.r*b.r, tot = ma+mb;
+          a.x -= nx * overlap * (mb/tot);
+          a.y -= ny * overlap * (mb/tot);
+          b.x += nx * overlap * (ma/tot);
+          b.y += ny * overlap * (ma/tot);
+          const rvx = b.vx - a.vx, rvy = b.vy - a.vy;
+          const vrel = rvx*nx + rvy*ny;
+          if(vrel < 0){
+            const j = -(1+REST_BALL)*vrel / (1/ma + 1/mb);
+            const ix = j*nx, iy = j*ny;
+            a.vx -= ix/ma; a.vy -= iy/ma;
+            b.vx += ix/mb; b.vy += iy/mb;
+            const tx=-ny, ty=nx;
+            const vrelT = rvx*tx + rvy*ty;
+            const jt = -vrelT * BALL_FRIC / (1/ma + 1/mb);
+            a.vx -= jt*tx/ma; a.vy -= jt*ty/ma;
+            b.vx += jt*tx/mb; b.vy += jt*ty/mb;
+          }
+          if(a.type===b.type){ merges.push([a,b]); }
+        }
+      }
+    }
+    if(merges.length){
+      for(const [a,b] of merges){
+        if(a.merged||b.merged) continue;
+        a.merged = b.merged = true;
+        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        const nt = a.type+1;
+        if(nt < RADII.length){
+          fruits.push({x:mx, y:my, r:RADII[nt], type:nt, vx:(a.vx+b.vx)/4, vy:(a.vy+b.vy)/4, merged:false});
+          const sc = SCORES[nt];
+          score += sc; $score.textContent = score;
+          effects.push({x:mx, y:my, r:RADII[nt]*0.55, alpha:1, txt:"+"+sc, color:"#C97A63"});
+        }else{
+          score += 100; $score.textContent = score;
+          effects.push({x:mx, y:my, r:RADII[9]*0.7, alpha:1, txt:"+100", color:"#7FA86B"});
+        }
+      }
+      fruits = fruits.filter(f=>!f.merged);
+    }
+  }
+
+  let above=false;
+  for(const f of fruits){ if(f.y - f.r < DANGER_Y) above=true; }
+  if(above){ overTimer++; if(overTimer > 80) gameOver(); } else overTimer=0;
+
+  for(const e of effects){ e.r += 3.0; e.alpha -= 0.03; }
+  effects = effects.filter(e=>e.alpha>0);
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+
+  /* 危险线：清新珊瑚色，避免暖金压暗、不干扰落点判断 */
+  ctx.save();
+  ctx.strokeStyle="rgba(224,138,122,.6)"; ctx.lineWidth=1.5; ctx.setLineDash([7,6]);
+  ctx.beginPath(); ctx.moveTo(8,DANGER_Y); ctx.lineTo(W-8,DANGER_Y); ctx.stroke();
+  ctx.setLineDash([]); ctx.fillStyle="#C97A63"; ctx.font="11px 'Noto Serif SC',serif"; ctx.textAlign="left";
+  ctx.fillText("危险线 · 水果堆过此线即结束", 10, DANGER_Y-6);
+  ctx.restore();
+
+  for(const f of fruits){
+    // 柔和投影：增强堆叠层次，让水果彼此分开
+    const sg = ctx.createRadialGradient(f.x, f.y + f.r*0.5, f.r*0.2, f.x, f.y + f.r*0.5, f.r*1.05);
+    sg.addColorStop(0, 'rgba(80,90,70,0.15)'); sg.addColorStop(1, 'rgba(80,90,70,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y + f.r*0.55, f.r*0.92, f.r*0.7, 0, 0, Math.PI*2); ctx.fill();
+    ctx.save(); ctx.translate(f.x, f.y); drawFruitShape(ctx, f.type, f.r); ctx.restore();
+  }
+
+  if(pending && !over){
+    ctx.save();
+    ctx.strokeStyle="rgba(127,168,107,.5)"; ctx.lineWidth=2; ctx.setLineDash([4,6]);
+    ctx.beginPath(); ctx.moveTo(pending.x, TOP_Y + RADII[pending.type]); ctx.lineTo(pending.x, H-4); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.translate(pending.x, TOP_Y);
+    drawFruitShape(ctx, pending.type, RADII[pending.type]);
+    ctx.restore();
+  }
+
+  for(const e of effects){
+    ctx.save(); ctx.globalAlpha = Math.max(0, e.alpha);
+    ctx.strokeStyle = "#7FA86B"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = e.color || "#3E4A36"; ctx.font = "bold 16px 'Noto Serif SC',serif"; ctx.textAlign="center";
+    ctx.fillText(e.txt, e.x, e.y - e.r - 6);
+    ctx.restore();
+  }
+}
+
+function pointerX(e){
+  const r = cv.getBoundingClientRect();
+  const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+  const cx = (clientX - r.left) * (W / r.width);   // 显示像素 → 逻辑坐标 W
+  return Math.max(RADII[0], Math.min(W-RADII[0], cx));
+}
+cv.addEventListener('pointermove', e=>{ if(pending && !over){ pending.x = pointerX(e); lastAimX = pending.x; } });
+cv.addEventListener('pointerdown', e=>{
+  // 落点即为"点击/落指处"：先用指针当前位置更新瞄准位，再落子，避免回中需二次移动
+  if(running && !over && pending){ lastAimX = pending.x = pointerX(e); dropPending(); }
+});
+window.addEventListener('keydown', e=>{
+  if(!pending || over) return;
+  if(e.key==='ArrowLeft')  pending.x = Math.max(RADII[pending.type], pending.x-12);
+  if(e.key==='ArrowRight') pending.x = Math.min(W-RADII[pending.type], pending.x+12);
+  if(e.key===' ' || e.key==='Enter'){ if(running && !over) dropPending(); }
+});
+
+document.getElementById('startBtn').onclick    = ()=>{ if(!running) startGame(); };
+document.getElementById('startBtn2').onclick   = ()=>{ if(!running) startGame(); };
+document.getElementById('restartBtn').onclick  = startGame;
+document.getElementById('restartTop').onclick= startGame;
+
+/* ===== 云端排行榜（Supabase / PostgREST 兼容 REST）=====
+ * 免费接入（Supabase 免费层：永久免费、无需信用卡、500MB 库 + API 请求不限量）：
+ * 1. supabase.com 注册（GitHub 或邮箱登录，免绑卡）→ New project（区域选 Singapore 最近）
+ * 2. 左侧「SQL Editor」执行下方建表 SQL
+ * 3. Settings → API：把 Project URL 填入 LB_BASE（补 /rest/v1 后缀）、
+ *    anon public key 填入 LB_KEY
+ *
+ * 注意：免费项目 7 天无访问会自动休眠（数据不丢，控制台一键 Restore）。
+ *
+ * 建表与权限 SQL（2026-05-30 后新项目必须显式 grant，否则 REST 读不到表）：
+ *   create table score(
+ *     id bigint generated by default as identity primary key,
+ *     name text not null,
+ *     score int not null default 0 check (score between 0 and 999999),
+ *     created_at timestamptz default now());
+ *   alter table score enable row level security;
+ *   create policy "anon_ins" on score for insert to anon with check (true);
+ *   create policy "anon_sel" on score for select to anon using (true);
+ *   grant usage on schema public to anon;
+ *   grant select, insert on table score to anon;
+ */
+const LB_BASE = "https://rkjknqikxqayyeiufmx.supabase.co/rest/v1";
+const LB_KEY  = "sb_publishable_cELF0q8W_y6pqqlnNH0gcA_uzIEeR06";  // anon public key（可公开，配合 RLS，不是 service_role！）
+
+const $lbOverlay=document.getElementById('lbOverlay'), $lbList=document.getElementById('lbList'),
+      $nameInput=document.getElementById('nameInput'), $submitTip=document.getElementById('submitTip'),
+      $submitScoreBtn=document.getElementById('submitScoreBtn');
+let submitted=false;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const lbReady=()=>!!(LB_BASE&&LB_KEY);
+const lbHeaders=()=>({'apikey':LB_KEY,'Authorization':'Bearer '+LB_KEY,'Content-Type':'application/json'});
+const fetchT=(u,o={},ms=10000)=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);return fetch(u,{...o,signal:c.signal}).finally(()=>clearTimeout(t));};
+
+/* 本机纪录榜（云端不可达时的降级） */
+const lbLocalGet=()=>{ try{ return JSON.parse(localStorage.getItem('watermelon_local_lb')||'[]'); }catch(e){ return []; } };
+const lbLocalAdd=(name,score)=>{
+  const a=lbLocalGet(); a.push({name:name,score:score});
+  a.sort((x,y)=>y.score-x.score);
+  try{ localStorage.setItem('watermelon_local_lb',JSON.stringify(a.slice(0,10))); }catch(e){}
+};
+const rowsHtml=items=>items.map((it,i)=>
+  '<div class="lb-row'+(i<3?' top'+(i+1):'')+'"><span class="lb-rank">'+(i+1)+'</span>'+
+  '<span class="lb-name">'+esc(it.name||'神秘玩家')+'</span>'+
+  '<span class="lb-score">'+it.score+'</span></div>').join('');
+const lbErr=e=>{ // 把云端失败原因翻译成人话，便于远程排查
+  if(e&&e.name==='AbortError') return '连接超时（代理未覆盖或网络阻断）';
+  const m=(e&&e.message)||'';
+  if(m.indexOf('404')>=0)  return '数据表不存在（建表 SQL 未执行）';
+  if(m.indexOf('401')>=0||m.indexOf('403')>=0) return '密钥或权限异常';
+  if(m.indexOf('Failed to fetch')>=0) return '网络连接被阻断';
+  return '服务异常('+(m||'未知')+')';
+};
+
+async function lbSubmit(name,score){
+  const body={name:String(name).slice(0,12),score:Math.max(0,Math.min(999999,Math.floor(score)))};
+  const res=await fetchT(LB_BASE+'/score',{method:'POST',headers:{...lbHeaders(),'Prefer':'return=minimal'},body:JSON.stringify(body)});
+  if(!res.ok) throw new Error('http '+res.status);
+}
+async function lbRank(score){ // 我的全服名次 = 比我分高的人数 + 1
+  const res=await fetchT(LB_BASE+'/score?select=score&score=gt.'+score,{headers:lbHeaders()});
+  if(!res.ok) throw new Error('http '+res.status);
+  const d=await res.json(); return d.length+1;
+}
+async function openLb(){
+  $lbOverlay.classList.add('show');
+  const local=lbLocalGet();
+  if(!lbReady()){
+    $lbList.innerHTML='<div class="lb-empty">云端排行榜配置中<br>当前为本机纪录模式</div>'+
+      (local.length?rowsHtml(local):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>');
+    return;
+  }
+  $lbList.innerHTML='<div class="lb-empty">加载中…</div>';
+  try{
+    const res=await fetchT(LB_BASE+'/score?select=name,score&order=score.desc&limit=10',{headers:lbHeaders()});
+    if(!res.ok) throw new Error('http '+res.status);
+    const data=await res.json();
+    if(!data.length){ $lbList.innerHTML='<div class="lb-empty">还没有人上榜<br>快来抢第一吧！</div>'; return; }
+    $lbList.innerHTML=rowsHtml(data);
+  }catch(e){ // 云端不可达 → 降级本机榜
+    $lbList.innerHTML=(local.length?rowsHtml(local):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
+      '<div class="lb-empty">（云端不可用：'+lbErr(e)+'，显示本机纪录）</div>';
+  }
+}
+async function onSubmitScore(){
+  if(submitted||!over) return;
+  const name=($nameInput.value||"").trim().slice(0,12)||"神秘玩家";
+  try{ localStorage.setItem('watermelon_name',name); }catch(e){}
+  if(!lbReady()){ $submitTip.textContent="排行榜服务尚未配置，暂无法上传"; return; }
+  submitted=true; $submitScoreBtn.disabled=true; $submitTip.textContent="上传中…";
+  try{
+    await lbSubmit(name,score);
+    let rankTxt="已记录";
+    try{ rankTxt="全服第 "+(await lbRank(score))+" 名"; }catch(e){}
+    $submitTip.textContent="已上传！"+rankTxt;
+    openLb();
+  }catch(e){
+    lbLocalAdd(name,score); // 云端不可达 → 记入本机纪录
+    submitted=false; $submitScoreBtn.disabled=false;
+    $submitTip.textContent="云端暂不可达（"+lbErr(e)+"），已记入本机榜单";
+  }
+}
+document.getElementById('lbBtn').onclick          = openLb;
+document.getElementById('lbClose').onclick        = ()=> $lbOverlay.classList.remove('show');
+$submitScoreBtn.onclick                           = onSubmitScore;
+
+const chain = document.getElementById('chain');
+const chainCanvases = []; // 收集所有链路画布，等 Twemoji 异步加载完后统一补绘
+NAMES.forEach((nm,i)=>{
+  const u = document.createElement('div'); u.className='unit';
+  const c = document.createElement('canvas'); c.width=84; c.height=84;
+  chainCanvases.push({cv:c, type:i});
+  paintFruitTo(c, i);
+  const lab = document.createElement('div'); lab.className='nm';
+  lab.innerHTML = nm+"<br>"+SCORES[i];
+  u.appendChild(c); u.appendChild(lab);
+  chain.appendChild(u);
+  if(i<NAMES.length-1){ const a=document.createElement('div'); a.className='arrow'; a.textContent='→'; chain.appendChild(a); }
+});
+
+function loop(){ step(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

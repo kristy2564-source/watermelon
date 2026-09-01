@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 128" width="120" height="128">
+  <g fill="#EAF2DD" stroke="#7FA86B" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+    <!-- 六片花瓣（尖瓣，放射状） -->
+    <path d="M60,66 C49,42 49,16 60,4 C71,16 71,42 60,66 Z"/>
+    <path d="M60,66 C49,42 49,16 60,4 C71,16 71,42 60,66 Z" transform="rotate(60 60 66)"/>
+    <path d="M60,66 C49,42 49,16 60,4 C71,16 71,42 60,66 Z" transform="rotate(120 60 66)"/>
+    <path d="M60,66 C49,42 49,16 60,4 C71,16 71,42 60,66 Z" transform="rotate(180 60 66)"/>
+    <path d="M60,66 C49,42 49,16 60,4 C71,16 71,42 60,66 Z" transform="rotate(240 60 66)"/>
+    <path d="M60,66 C49,42 49,16 60,4 C71,16 71,42 60,66 Z" transform="rotate(300 60 66)"/>
+    <!-- 中心花蕊 -->
+    <circle cx="60" cy="66" r="10" fill="#F4F8EE" stroke-width="2"/>
+    <g stroke-width="1.5" fill="#7FA86B">
+      <circle cx="60" cy="50" r="2.6"/>
+      <circle cx="74" cy="60" r="2.6"/>
+      <circle cx="46" cy="60" r="2.6"/>
+      <circle cx="72" cy="78" r="2.6"/>
+      <circle cx="48" cy="78" r="2.6"/>
+    </g>
+    <!-- 穆夏式卷须 -->
+    <path d="M60,76 C36,86 30,108 46,116" fill="none" stroke-width="2"/>
+    <path d="M60,76 C84,86 90,108 74,116" fill="none" stroke-width="2"/>
+  </g>
+</svg>

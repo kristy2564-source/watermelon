@@ -1,0 +1,12 @@
+# 工作区内部目录（含个人工作日志，不入库）
+.workbuddy/
+
+# 临时/校验文件
+_check.js
+_g.txt
+_lbtest*.txt
+*.tmp
+
+# 系统文件
+.DS_Store
+Thumbs.db
