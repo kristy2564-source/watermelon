@@ -135,10 +135,21 @@
     display:flex; align-items:center; gap:10px; font-size:14px; color:var(--body);
     background:rgba(127,168,107,.08); border-radius:12px; padding:8px 12px;
   }
-  .lb-rank{width:24px; font-weight:700; color:var(--sage); text-align:center;}
-  .lb-row.top1 .lb-rank{color:#C9962E;}
-  .lb-row.top2 .lb-rank{color:#8C9BA8;}
-  .lb-row.top3 .lb-rank{color:#B0764F;}
+  .lb-rank{
+    width:28px; flex:0 0 28px; font-weight:700; color:var(--sage);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+  }
+  .lb-rank i{font-style:normal; font-size:10px; line-height:1; letter-spacing:.02em;}
+  .lb-crown{width:18px; height:15px; display:block; filter:drop-shadow(0 1px 1px rgba(62,74,54,.22));}
+  .lb-row.top1 .lb-rank{color:#A8761F;}
+  .lb-row.top2 .lb-rank{color:#6B7883;}
+  .lb-row.top3 .lb-rank{color:#8C5730;}
+  .lb-row.top1{background:linear-gradient(90deg,rgba(201,150,46,.18),rgba(201,150,46,.04)); box-shadow:inset 0 0 0 1px rgba(201,150,46,.3);}
+  .lb-row.top2{background:linear-gradient(90deg,rgba(140,155,168,.18),rgba(140,155,168,.04)); box-shadow:inset 0 0 0 1px rgba(140,155,168,.3);}
+  .lb-row.top3{background:linear-gradient(90deg,rgba(176,118,79,.18),rgba(176,118,79,.04)); box-shadow:inset 0 0 0 1px rgba(176,118,79,.3);}
+  .lb-row.top1 .lb-score{color:#A8761F;}
+  .lb-row.top2 .lb-score{color:#6B7883;}
+  .lb-row.top3 .lb-score{color:#8C5730;}
   .lb-row.me{outline:1.5px dashed var(--sage); background:rgba(127,168,107,.16);}
   .lb-my-sep{font-size:12px; color:var(--sub); text-align:center; padding:7px 0 1px; border-top:1px solid rgba(127,168,107,.28);}
   .lb-name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -178,6 +189,20 @@
 </style>
 </head>
 <body>
+  <!-- 皇冠渐变定义（金/银/铜，供排行榜前三名引用） -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="crownGold" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#F8E3A2"/><stop offset="1" stop-color="#C9962E"/>
+      </linearGradient>
+      <linearGradient id="crownSilver" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#EFF4F8"/><stop offset="1" stop-color="#8C9BA8"/>
+      </linearGradient>
+      <linearGradient id="crownBronze" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#EFCBAE"/><stop offset="1" stop-color="#B0764F"/>
+      </linearGradient>
+    </defs>
+  </svg>
 <div class="app">
   <header>
     <div class="brand"><span class="emoji">🍉</span><h1>合成大西瓜</h1></div>
@@ -597,8 +622,17 @@ const lbLocalAdd=(name,score)=>{
 };
 const lbLastGet=()=>{ try{ return JSON.parse(localStorage.getItem('watermelon_last_lb')||'null'); }catch(e){ return null; } };
 const lbLastSet=item=>{ try{ localStorage.setItem('watermelon_last_lb',JSON.stringify(item)); }catch(e){} };
+const CROWN_FILL={1:'url(#crownGold)',2:'url(#crownSilver)',3:'url(#crownBronze)'};
+const crownSvg=rank=>
+  '<svg class="lb-crown" viewBox="0 0 24 20" aria-hidden="true">'+
+  '<path d="M2.2 15.2 L3.4 4.6 L7.9 9.2 L12 2.6 L16.1 9.2 L20.6 4.6 L21.8 15.2 Z" fill="'+CROWN_FILL[rank]+'" stroke="rgba(255,255,255,.85)" stroke-width=".7" stroke-linejoin="round"/>'+
+  '<rect x="2.6" y="14.6" width="18.8" height="3.2" rx="1.4" fill="'+CROWN_FILL[rank]+'"/>'+
+  '</svg>';
 const lbRowHtml=(it,rank,isMe=false)=>
-  '<div class="lb-row'+(rank<=3?' top'+rank:'')+(isMe?' me':'')+'"><span class="lb-rank">'+rank+'</span>'+
+  '<div class="lb-row'+(rank<=3?' top'+rank:'')+(isMe?' me':'')+'">'+
+  (rank<=3
+    ? '<span class="lb-rank">'+crownSvg(rank)+'<i>'+rank+'</i></span>'
+    : '<span class="lb-rank">'+rank+'</span>')+
   '<span class="lb-name">'+esc(it.name||'神秘玩家')+'</span>'+
   '<span class="lb-score">'+it.score+'</span></div>';
 const rowsHtml=(items,my=null)=>items.map(it=>{
