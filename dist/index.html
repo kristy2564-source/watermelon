@@ -40,6 +40,7 @@
     box-shadow:0 4px 12px rgba(94,138,78,.32); transition:transform .12s ease, filter .12s ease;
   }
   .btn:hover{filter:brightness(1.05);} .btn:active{transform:scale(.96);}
+  .btn:disabled{opacity:.45; cursor:default; transform:none; box-shadow:none;}
   .btn.ghost{background:var(--card); color:var(--ink); border:1.5px solid var(--sage); box-shadow:none;}
   main{display:flex; gap:34px; justify-content:center; align-items:flex-start; flex-wrap:wrap;}
   .stage-decor{position:relative; padding:72px 72px 82px;}
@@ -237,6 +238,7 @@
     <div class="brand"><span class="emoji">🍉</span><h1>合成大西瓜</h1></div>
     <div class="top-actions">
       <button class="btn ghost" id="lbBtn">🏆 排行榜</button>
+      <button class="btn ghost" id="pauseBtn" disabled title="游戏开始后可暂停">⏸ 暂停</button>
       <button class="btn ghost" id="restartTop">重新开始</button>
     </div>
   </header>
@@ -270,6 +272,11 @@
             </div>
             <button class="btn" id="startBtn2">开始游戏</button>
           </div>
+        </div>
+
+        <div class="overlay" id="pauseOverlay">
+          <h2>⏸ 已暂停</h2>
+          <button class="btn" id="resumeBtn">继续游戏</button>
         </div>
 
         <div class="overlay" id="lbOverlay">
@@ -411,6 +418,7 @@ function setupCanvas(){
 /* setupCanvas() 的调用与监听已下移，避免提前访问 pending 触发 TDZ 报错 */
 
 let fruits=[], pending=null, nextType=0, score=0, best=0, running=false, over=false,  overTimer=0, effects=[], lastDropTime=-9999;
+let paused=false; // 暂停中：物理冻结、输入锁定，仅游戏进行中可暂停
 const DROP_CD = 380; // 两次投放最小间隔(ms)，避免连点连发
 setupCanvas();
 window.addEventListener('resize', setupCanvas);
@@ -438,6 +446,8 @@ function spawnPending(){
 }
 function startGame(){
   clearRun(); // 新一局开始，释放上一局的临时缓存
+  paused=false; $pauseOverlay.classList.remove('show'); // 若在暂停中重开，先解除暂停
+  $pauseBtn.disabled=false; // 游戏开始，暂停按钮可用
   fruits=[]; effects=[]; score=0; over=false; overTimer=0; submitted=false;
   $score.textContent="0"; $overlay.classList.remove('show');
   $startOverlay.classList.remove('show');
@@ -447,6 +457,8 @@ function startGame(){
 function gameOver(){
   over=true; running=false;
   clearRun(); // 本局结束，释放临时缓存
+  $pauseBtn.disabled=true; // 已结束，暂停按钮不可用
+  paused=false; $pauseOverlay.classList.remove('show');
   $final.textContent=score;
   $overlay.classList.add('show');
   submitted=false; $submitTip.textContent=""; $submitScoreBtn.disabled=false;
@@ -506,11 +518,12 @@ function tryRestoreRun(){
   paintFruitTo($nextCv, nextType);
   $startOverlay.classList.remove('show');
   running=true; over=false; overTimer=0; lastDropTime=-9999; submitted=false;
+  $pauseBtn.disabled=false; // 恢复的这局同样允许暂停
   return true;
 }
 
 function step(){
-  if(!running) return;
+  if(!running || paused) return; // 暂停中冻结物理
   for(let s=0;s<SUBSTEPS;s++){
     for(const f of fruits){
       f.vy += G/SUBSTEPS;
@@ -632,13 +645,13 @@ function pointerX(e){
   const cx = (clientX - r.left) * (W / r.width);   // 显示像素 → 逻辑坐标 W
   return Math.max(RADII[0], Math.min(W-RADII[0], cx));
 }
-cv.addEventListener('pointermove', e=>{ if(pending && !over){ pending.x = pointerX(e); lastAimX = pending.x; } });
+cv.addEventListener('pointermove', e=>{ if(pending && !over && !paused){ pending.x = pointerX(e); lastAimX = pending.x; } });
 cv.addEventListener('pointerdown', e=>{
   // 落点即为"点击/落指处"：先用指针当前位置更新瞄准位，再落子，避免回中需二次移动
-  if(running && !over && pending){ lastAimX = pending.x = pointerX(e); dropPending(); }
+  if(running && !over && !paused && pending){ lastAimX = pending.x = pointerX(e); dropPending(); }
 });
 window.addEventListener('keydown', e=>{
-  if(!pending || over) return;
+  if(!pending || over || paused) return;
   if(e.key==='ArrowLeft')  pending.x = Math.max(RADII[pending.type], pending.x-12);
   if(e.key==='ArrowRight') pending.x = Math.min(W-RADII[pending.type], pending.x+12);
   if(e.key===' ' || e.key==='Enter'){ if(running && !over) dropPending(); }
@@ -648,6 +661,31 @@ document.getElementById('startBtn').onclick    = ()=>{ if(!running) startGame();
 document.getElementById('startBtn2').onclick   = ()=>{ if(!running) startGame(); };
 document.getElementById('restartBtn').onclick  = startGame;
 document.getElementById('restartTop').onclick= startGame;
+
+/* ===== 暂停 / 继续 =====
+ * 仅游戏进行中（running 且未结束）可暂停，按钮其余时间 disabled，防误触。
+ * 暂停时：物理冻结、指针/键盘输入锁定、弹窗覆盖游戏区；补存一次本局快照。
+ * 恢复时：带一次投放冷却（380ms），避免点「继续」瞬间手滑落子。 */
+const $pauseBtn=document.getElementById('pauseBtn'), $pauseOverlay=document.getElementById('pauseOverlay');
+$pauseBtn.disabled=true; // 初始（未开始）不可暂停
+function pauseGame(){
+  if(!running || over || paused) return;
+  paused=true;
+  saveRun(); // 暂停即快照，此刻刷新也能恢复
+  $pauseOverlay.classList.add('show');
+}
+function resumeGame(){
+  if(!paused) return;
+  paused=false;
+  $pauseOverlay.classList.remove('show');
+  lastDropTime=performance.now(); // 恢复瞬间短冷却，防误落
+}
+$pauseBtn.onclick = pauseGame;
+document.getElementById('resumeBtn').onclick = resumeGame;
+// 暂停状态下按空格/回车 = 继续（与投放键一致的手感）
+window.addEventListener('keydown', e=>{
+  if(paused && (e.key===' ' || e.key==='Enter')){ e.preventDefault(); resumeGame(); }
+});
 
 /* ===== 云端排行榜（Supabase / PostgREST 兼容 REST）=====
  * 免费接入（Supabase 免费层：永久免费、无需信用卡、500MB 库 + API 请求不限量）：
