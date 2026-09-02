@@ -173,6 +173,16 @@
   .lb-score{font-weight:700; color:var(--ink);}
   .lb-empty{font-size:13px; color:var(--sub); text-align:center; padding:26px 8px; line-height:1.8;}
 
+  /* ===== 本局恢复提示（轻量 toast，不挡操作） ===== */
+  .restore-toast{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    z-index:15; background:rgba(62,74,54,.9); color:#F6F8EF;
+    font-size:13px; letter-spacing:.05em; padding:8px 18px; border-radius:999px;
+    box-shadow:0 6px 16px rgba(62,74,54,.25);
+    opacity:0; pointer-events:none; transition:opacity .35s ease;
+  }
+  .restore-toast.show{opacity:1;}
+
   /* ===== 响应式：窄屏（手机）适配 ===== */
   @media (max-width:680px){
     body{padding:14px 10px 28px;}
@@ -236,6 +246,7 @@
       <img class="stage-frame" src="assets/frame_ring_sage.svg" alt="" onerror="this.style.display='none'" />
       <div class="stage-wrap">
         <canvas id="game" width="440" height="600"></canvas>
+        <div class="restore-toast" id="restoreToast">🔄 已恢复上次未完成的一局</div>
         <div class="overlay" id="overlay">
           <h2>游戏结束</h2>
           <div class="final">本局得分 <b id="finalScore">0</b></div>
@@ -426,6 +437,7 @@ function spawnPending(){
   paintFruitTo($nextCv, nextType);
 }
 function startGame(){
+  clearRun(); // 新一局开始，释放上一局的临时缓存
   fruits=[]; effects=[]; score=0; over=false; overTimer=0; submitted=false;
   $score.textContent="0"; $overlay.classList.remove('show');
   $startOverlay.classList.remove('show');
@@ -434,6 +446,7 @@ function startGame(){
 }
 function gameOver(){
   over=true; running=false;
+  clearRun(); // 本局结束，释放临时缓存
   $final.textContent=score;
   $overlay.classList.add('show');
   submitted=false; $submitTip.textContent=""; $submitScoreBtn.disabled=false;
@@ -449,6 +462,51 @@ function dropPending(){
   const t = pending.type;
   fruits.push({x:pending.x, y:TOP_Y, r:RADII[t], type:t, vx:(Math.random()-0.5)*0.5, vy:1.5, merged:false});
   spawnPending();
+}
+
+/* ===== 本局临时缓存（sessionStorage）=====
+ * 场景：网络不稳触发页面刷新时，未结束的一局不丢，恢复后继续玩。
+ * 写入：游戏进行中每 ~1.5s 快照一次 + pagehide/切后台时补存（只存 running 且未结束的局）。
+ * 恢复：页面加载时检测快照 → 校验合法后还原水果/待落水果/分数，轻提示告知。
+ * 释放：gameOver() 或玩家主动重开 startGame() 时删除 —— 本局结束即释放。 */
+const RUN_KEY='watermelon_run_v1';
+let saveTick=0;
+function saveRun(){
+  if(!running || over) return;
+  try{
+    sessionStorage.setItem(RUN_KEY, JSON.stringify({
+      v:1,
+      fruits: fruits.map(f=>({x:+f.x.toFixed(1), y:+f.y.toFixed(1),
+                              vx:+f.vx.toFixed(2), vy:+f.vy.toFixed(2), r:f.r, type:f.type})),
+      pending: pending ? {x:+pending.x.toFixed(1), type:pending.type} : null,
+      nextType: nextType, score: score, lastAimX: lastAimX
+    }));
+  }catch(e){}
+}
+function clearRun(){ try{ sessionStorage.removeItem(RUN_KEY); }catch(e){} }
+function tryRestoreRun(){
+  let d=null;
+  try{ d=JSON.parse(sessionStorage.getItem(RUN_KEY)||'null'); }catch(e){}
+  if(!d || d.v!==1 || !Array.isArray(d.fruits) || d.fruits.length>80){ clearRun(); return false; }
+  const ok = d.fruits.length===0 || d.fruits.every(f=>
+    f && Number.isFinite(f.x) && Number.isFinite(f.y) && Number.isFinite(f.r)
+    && Number.isInteger(f.type) && f.type>=0 && f.type<RADII.length);
+  if(!ok){ clearRun(); return false; } // 数据损坏 → 丢弃缓存，按新局处理
+  fruits = d.fruits.map(f=>({x:f.x, y:f.y, vx:Number(f.vx)||0, vy:Number(f.vy)||0,
+                             r:f.r, type:f.type, merged:false}));
+  score = Math.max(0, Math.min(999999, Math.floor(Number(d.score))||0));
+  nextType = (Number.isInteger(d.nextType) && d.nextType>=0 && d.nextType<RADII.length) ? d.nextType : 0;
+  lastAimX = Number.isFinite(d.lastAimX) ? d.lastAimX : null;
+  pending = (d.pending && Number.isFinite(d.pending.x) && Number.isInteger(d.pending.type)
+             && d.pending.type>=0 && d.pending.type<RADII.length)
+    ? {x:Math.max(RADII[d.pending.type], Math.min(W-RADII[d.pending.type], d.pending.x)), type:d.pending.type}
+    : null;
+  if(!pending) spawnPending();          // 快照里没有待落水果（小概率）→ 现补一颗
+  $score.textContent = score;
+  paintFruitTo($nextCv, nextType);
+  $startOverlay.classList.remove('show');
+  running=true; over=false; overTimer=0; lastDropTime=-9999; submitted=false;
+  return true;
 }
 
 function step(){
@@ -524,6 +582,8 @@ function step(){
 
   for(const e of effects){ e.r += 3.0; e.alpha -= 0.03; }
   effects = effects.filter(e=>e.alpha>0);
+
+  if(++saveTick >= 90){ saveTick=0; saveRun(); } // 每 ~1.5s 快照一次本局状态
 }
 
 function draw(){
@@ -780,6 +840,17 @@ NAMES.forEach((nm,i)=>{
 });
 
 function loop(){ step(); draw(); requestAnimationFrame(loop); }
+
+/* 启动时尝试恢复上次未完成的一局；刷新/关闭/切后台前补存一次快照 */
+if(tryRestoreRun()){
+  const t=document.getElementById('restoreToast');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2600);
+}
+window.addEventListener('pagehide', saveRun);
+window.addEventListener('beforeunload', saveRun);
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) saveRun(); });
+
 loop();
 </script>
 </body>
