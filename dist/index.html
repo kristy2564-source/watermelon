@@ -40,9 +40,11 @@
     box-shadow:0 4px 12px rgba(94,138,78,.32); transition:transform .12s ease, filter .12s ease;
   }
   .btn:hover{filter:brightness(1.05);} .btn:active{transform:scale(.96);}
+  .btn{white-space:nowrap;} /* 任何屏宽下按钮文字不折行 */
+  .brand h1{white-space:nowrap;}
   .btn:disabled{opacity:.45; cursor:default; transform:none; box-shadow:none;}
   .btn.ghost{background:var(--card); color:var(--ink); border:1.5px solid var(--sage); box-shadow:none;}
-  .btn-ico{padding:11px 15px; font-size:17px; line-height:1;} /* 暂停按钮：纯图标，窄屏不占空间 */
+  .btn-ico{padding:11px 15px; line-height:1; display:inline-flex; align-items:center; justify-content:center; color:var(--ink);} /* 暂停按钮：SVG 图标，窄屏不占空间 */
   main{display:flex; gap:34px; justify-content:center; align-items:flex-start; flex-wrap:wrap;}
   .stage-decor{position:relative; padding:72px 72px 82px;}
   .stage-frame{
@@ -189,14 +191,14 @@
   @media (max-width:680px){
     body{padding:14px 10px 28px;}
     .app{max-width:100%;}
-    header{padding:10px 16px; margin-bottom:14px; border-radius:14px;}
-    header .btn{padding:9px 13px; font-size:13px;}
+    header{padding:8px 14px; margin-bottom:12px; border-radius:14px; row-gap:8px; flex-wrap:wrap;}
+    header .btn{padding:8px 10px; font-size:12px;}
     .top-actions{gap:6px;}
-    .brand{gap:8px;}
-    .brand .emoji{font-size:26px;}
-    .brand h1{font-size:20px;}
-    .btn{padding:9px 16px; font-size:14px;}
-    .btn-ico{padding:9px 11px; font-size:15px;} /* 窄屏暂停图标钮：紧凑但不失触达面积 */
+    .brand{gap:7px; flex-shrink:0;} /* 品牌区不被压缩折行 */
+    .brand .emoji{font-size:24px;}
+    .brand h1{font-size:17px; letter-spacing:.5px;}
+    .btn{padding:8px 12px; font-size:13px;}
+    .btn-ico{padding:8px 10px;} /* 窄屏暂停图标钮：紧凑但不失触达面积 */
     main{gap:16px;}
     .stage-decor{padding:32px 32px 38px;}
     .stage-wrap{padding:12px; border-radius:22px; margin:0 auto;}
@@ -214,7 +216,12 @@
     .unit .nm{font-size:10px;}
   }
   @media (max-width:380px){
-    .brand h1{font-size:18px;}
+    .brand .emoji{font-size:20px;}
+    .brand h1{font-size:15px; letter-spacing:0;}
+    header{padding:8px 10px;}
+    header .btn{padding:8px 8px; font-size:11px;}
+    .top-actions{gap:4px;}
+    .btn-ico{padding:8px 9px;}
     .unit{width:48px;}
     .unit canvas{width:34px; height:34px;}
   }
@@ -240,7 +247,9 @@
     <div class="brand"><span class="emoji">🍉</span><h1>合成大西瓜</h1></div>
     <div class="top-actions">
       <button class="btn ghost" id="lbBtn">🏆 排行榜</button>
-      <button class="btn ghost btn-ico" id="pauseBtn" disabled title="游戏开始后可暂停" aria-label="暂停">⏸</button>
+      <button class="btn ghost btn-ico" id="pauseBtn" disabled title="游戏开始后可暂停" aria-label="暂停">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><rect x="6" y="4" width="4.6" height="16" rx="2.2" fill="currentColor"/><rect x="13.4" y="4" width="4.6" height="16" rx="2.2" fill="currentColor"/></svg>
+      </button>
       <button class="btn ghost" id="restartTop">重新开始</button>
     </div>
   </header>
@@ -277,7 +286,7 @@
         </div>
 
         <div class="overlay" id="pauseOverlay">
-          <h2>⏸ 已暂停</h2>
+          <h2><svg viewBox="0 0 24 24" width="20" height="20" style="vertical-align:-3px" aria-hidden="true"><rect x="6" y="4" width="4.6" height="16" rx="2.2" fill="currentColor"/><rect x="13.4" y="4" width="4.6" height="16" rx="2.2" fill="currentColor"/></svg> 已暂停</h2>
           <button class="btn" id="resumeBtn">继续游戏</button>
         </div>
 
