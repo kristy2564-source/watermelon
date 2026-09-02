@@ -42,6 +42,7 @@
   .btn:hover{filter:brightness(1.05);} .btn:active{transform:scale(.96);}
   .btn:disabled{opacity:.45; cursor:default; transform:none; box-shadow:none;}
   .btn.ghost{background:var(--card); color:var(--ink); border:1.5px solid var(--sage); box-shadow:none;}
+  .btn-ico{padding:11px 15px; font-size:17px; line-height:1;} /* 暂停按钮：纯图标，窄屏不占空间 */
   main{display:flex; gap:34px; justify-content:center; align-items:flex-start; flex-wrap:wrap;}
   .stage-decor{position:relative; padding:72px 72px 82px;}
   .stage-frame{
@@ -195,6 +196,7 @@
     .brand .emoji{font-size:26px;}
     .brand h1{font-size:20px;}
     .btn{padding:9px 16px; font-size:14px;}
+    .btn-ico{padding:9px 11px; font-size:15px;} /* 窄屏暂停图标钮：紧凑但不失触达面积 */
     main{gap:16px;}
     .stage-decor{padding:32px 32px 38px;}
     .stage-wrap{padding:12px; border-radius:22px; margin:0 auto;}
@@ -238,7 +240,7 @@
     <div class="brand"><span class="emoji">🍉</span><h1>合成大西瓜</h1></div>
     <div class="top-actions">
       <button class="btn ghost" id="lbBtn">🏆 排行榜</button>
-      <button class="btn ghost" id="pauseBtn" disabled title="游戏开始后可暂停">⏸ 暂停</button>
+      <button class="btn ghost btn-ico" id="pauseBtn" disabled title="游戏开始后可暂停" aria-label="暂停">⏸</button>
       <button class="btn ghost" id="restartTop">重新开始</button>
     </div>
   </header>
@@ -476,17 +478,17 @@ function dropPending(){
   spawnPending();
 }
 
-/* ===== 本局临时缓存（sessionStorage）=====
- * 场景：网络不稳触发页面刷新时，未结束的一局不丢，恢复后继续玩。
+/* ===== 本局临时缓存（localStorage，key 生命周期=本局）=====
+ * 场景：网络不稳触发页面刷新、甚至关掉页面/浏览器后重新打开，未结束的一局都能恢复继续玩。
  * 写入：游戏进行中每 ~1.5s 快照一次 + pagehide/切后台时补存（只存 running 且未结束的局）。
  * 恢复：页面加载时检测快照 → 校验合法后还原水果/待落水果/分数，轻提示告知。
- * 释放：gameOver() 或玩家主动重开 startGame() 时删除 —— 本局结束即释放。 */
+ * 释放：gameOver() 或玩家主动重开 startGame() 时删除 —— 本局结束即释放，不会长期残留。 */
 const RUN_KEY='watermelon_run_v1';
 let saveTick=0;
 function saveRun(){
   if(!running || over) return;
   try{
-    sessionStorage.setItem(RUN_KEY, JSON.stringify({
+    localStorage.setItem(RUN_KEY, JSON.stringify({
       v:1,
       fruits: fruits.map(f=>({x:+f.x.toFixed(1), y:+f.y.toFixed(1),
                               vx:+f.vx.toFixed(2), vy:+f.vy.toFixed(2), r:f.r, type:f.type})),
@@ -495,10 +497,10 @@ function saveRun(){
     }));
   }catch(e){}
 }
-function clearRun(){ try{ sessionStorage.removeItem(RUN_KEY); }catch(e){} }
+function clearRun(){ try{ localStorage.removeItem(RUN_KEY); }catch(e){} }
 function tryRestoreRun(){
   let d=null;
-  try{ d=JSON.parse(sessionStorage.getItem(RUN_KEY)||'null'); }catch(e){}
+  try{ d=JSON.parse(localStorage.getItem(RUN_KEY)||'null'); }catch(e){}
   if(!d || d.v!==1 || !Array.isArray(d.fruits) || d.fruits.length>80){ clearRun(); return false; }
   const ok = d.fruits.length===0 || d.fruits.every(f=>
     f && Number.isFinite(f.x) && Number.isFinite(f.y) && Number.isFinite(f.r)
