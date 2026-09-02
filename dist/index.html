@@ -187,6 +187,34 @@
   }
   .restore-toast.show{opacity:1;}
 
+  /* ===== 道具栏（2.0 合成解锁） ===== */
+  .power-bar{display:flex; justify-content:center; gap:10px; margin-top:12px;}
+  .power-slot{
+    position:relative; display:flex; flex-direction:column; align-items:center; gap:3px;
+    width:66px; padding:9px 6px 8px; background:var(--card); border:1.5px solid var(--sage);
+    border-radius:14px; cursor:pointer; font-family:inherit; color:var(--ink);
+    box-shadow:0 4px 10px rgba(94,138,78,.16); transition:transform .12s ease, filter .12s ease;
+  }
+  .power-slot:hover{filter:brightness(1.04);}
+  .power-slot:active{transform:scale(.95);}
+  .power-slot .pw-icon{font-size:22px; line-height:1;}
+  .power-slot .pw-nm{font-size:11px; font-weight:700; color:var(--body); white-space:nowrap;}
+  .power-slot .pw-cnt{
+    position:absolute; top:-7px; right:-7px; min-width:20px; height:20px; padding:0 5px;
+    border-radius:10px; background:var(--sage-d); color:#fff; font-size:12px; font-weight:700;
+    line-height:20px; text-align:center; box-shadow:0 2px 6px rgba(94,138,78,.4);
+  }
+  .power-slot:disabled{opacity:.38; cursor:default; box-shadow:none; filter:none;}
+  .power-slot.empty .pw-cnt{background:var(--sub);}
+  .power-slot.aim{outline:2px solid var(--peach); outline-offset:2px; box-shadow:0 0 0 6px rgba(231,161,124,.18);}
+
+  /* 排行榜 tab 切换 + 本局去向提示 */
+  .lb-tabs{display:flex; gap:6px; background:rgba(127,168,107,.12); border-radius:12px; padding:4px;}
+  .lb-tab{flex:1; border:none; background:transparent; font-family:inherit; font-size:13px; font-weight:700;
+    color:var(--sub); padding:7px 4px; border-radius:9px; cursor:pointer; white-space:nowrap; transition:background .15s ease, color .15s ease;}
+  .lb-tab.active{background:var(--card); color:var(--sage-d); box-shadow:0 2px 6px rgba(62,74,54,.12);}
+  .mode-note{font-size:12px; color:var(--sub); margin-top:-4px;}
+
   /* ===== 响应式：窄屏（手机）适配 ===== */
   @media (max-width:680px){
     body{padding:14px 10px 28px;}
@@ -199,6 +227,9 @@
     .brand h1{font-size:17px; letter-spacing:.5px;}
     .btn{padding:8px 12px; font-size:13px;}
     .btn-ico{padding:8px 10px;} /* 窄屏暂停图标钮：紧凑但不失触达面积 */
+    .power-bar{gap:8px; margin-top:10px;}
+    .power-slot{width:60px; padding:8px 4px 7px;}
+    .power-slot .pw-icon{font-size:20px;}
     main{gap:16px;}
     .stage-decor{padding:32px 32px 38px;}
     .stage-wrap{padding:12px; border-radius:22px; margin:0 auto;}
@@ -259,6 +290,17 @@
       <img class="stage-frame" src="assets/frame_ring_sage.svg" alt="" onerror="this.style.display='none'" />
       <div class="stage-wrap">
         <canvas id="game" width="440" height="600"></canvas>
+        <div class="power-bar" id="powerBar">
+          <button class="power-slot" id="pwPluck" disabled title="摘除：点掉一个水果">
+            <span class="pw-icon">🍃</span><span class="pw-nm">摘除</span><span class="pw-cnt">0</span>
+          </button>
+          <button class="power-slot" id="pwSame" disabled title="同类消：消除同类型所有水果">
+            <span class="pw-icon">🔮</span><span class="pw-nm">同类消</span><span class="pw-cnt">0</span>
+          </button>
+          <button class="power-slot" id="pwShuffle" disabled title="洗牌：所有水果重新撒落">
+            <span class="pw-icon">🌪</span><span class="pw-nm">洗牌</span><span class="pw-cnt">0</span>
+          </button>
+        </div>
         <div class="restore-toast" id="restoreToast">已恢复上次未完成的一局</div>
         <div class="overlay" id="overlay">
           <h2>游戏结束</h2>
@@ -268,6 +310,7 @@
             <button class="btn" id="submitScoreBtn">上传成绩</button>
           </div>
           <div class="submit-tip" id="submitTip"></div>
+          <div class="mode-note" id="modeNote"></div>
           <button class="btn" id="restartBtn">再来一局</button>
         </div>
 
@@ -278,7 +321,8 @@
             <div class="start-guide">
               • 移动鼠标 / 手指瞄准落点，点击放下水果<br>
               • 相同两个水果相撞，会合成更大的下一阶<br>
-              • 一路合成到大西瓜即可封顶得分<br>
+              • 合成出橘子 / 桃子 / 菠萝，会获得对应道具<br>
+              • 道具：🍃摘除 · 🔮同类消 · 🌪洗牌（合成解锁）<br>
               <span class="hi">• 水果堆过顶部危险线即结束，挑战极限吧！</span>
             </div>
             <button class="btn" id="startBtn2">开始游戏</button>
@@ -293,6 +337,10 @@
         <div class="overlay" id="lbOverlay">
           <div class="lb-card">
             <h2 id="lbTitle">🏆 全服排行榜</h2>
+            <div class="lb-tabs" id="lbTabs">
+              <button class="lb-tab active" id="lbTabClassic">全服榜</button>
+              <button class="lb-tab" id="lbTabPower">道具挑战榜</button>
+            </div>
             <div class="lb-list" id="lbList"><div class="lb-empty">加载中…</div></div>
             <button class="btn ghost" id="lbClose">关闭</button>
           </div>
@@ -317,8 +365,9 @@
         <div class="rt">玩法说明</div>
         <p>• 移动鼠标 / 手指瞄准落点，点击放下水果</p>
         <p>• 相同的两个水果相撞会合成更大的水果</p>
-        <p>• 水果堆到危险线以上即游戏结束</p>
-        <p class="hi">• 合成大西瓜可得最高分！</p>
+        <p>• 合成出橘子 / 桃子 / 菠萝，获得对应道具</p>
+        <p>• 道具：🍃摘除 · 🔮同类消 · 🌪洗牌</p>
+        <p class="hi">• 水果堆到危险线以上即游戏结束！</p>
       </div>
       <button class="btn" id="startBtn">开始游戏</button>
       <div class="hint">提示：键盘 ← → 微调落点 · 水果落地后会沿斜堆缓缓滚下</div>
@@ -431,12 +480,30 @@ function setupCanvas(){
 let fruits=[], pending=null, nextType=0, score=0, best=0, running=false, over=false,  overTimer=0, effects=[], lastDropTime=-9999;
 let paused=false; // 暂停中：物理冻结、输入锁定，仅游戏进行中可暂停
 const DROP_CD = 380; // 两次投放最小间隔(ms)，避免连点连发
+
+/* ===== 道具系统（2.0 合成解锁） =====
+ * 合成出指定水果时获得对应道具（见 POWERUP_UNLOCK），库存上限 POWERUP_MAX，本局内有效、结束清零。
+ * powerUsed 标记本局是否用过道具 → 决定成绩进「全服榜(纯净)」还是「道具挑战榜」。 */
+const POWERUP_DEFS = {
+  pluck:  {label:'摘除',   icon:'🍃', desc:'点掉一个水果'},
+  same:   {label:'同类消', icon:'🔮', desc:'消除同类型所有水果'},
+  shuffle:{label:'洗牌',   icon:'🌪', desc:'所有水果重新撒落'},
+};
+const POWERUP_UNLOCK = {3:'pluck', 6:'same', 7:'shuffle'}; // 合成出 橘子/桃子/菠萝 时获得
+const POWERUP_MAX = 2;
+let powerInv = {pluck:0, same:0, shuffle:0};
+let powerUsed = false;  // 本局是否使用过任意道具
+let aimMode = null;     // null | 'pluck' | 'same'，瞄准态
+let aimHover = null;    // 瞄准态下悬停/命中的水果索引
+let graceFrames = 0;    // 危险线宽限帧：洗牌/恢复时水果短暂高于危险线，避免误判游戏结束
+
 setupCanvas();
 window.addEventListener('resize', setupCanvas);
 window.addEventListener('orientationchange', () => setTimeout(setupCanvas, 200));
 const $score=document.getElementById('score'), $best=document.getElementById('best'),
       $overlay=document.getElementById('overlay'), $final=document.getElementById('finalScore'),
-      $nextCv=document.getElementById('nextCv'), $startOverlay=document.getElementById('startOverlay');
+      $nextCv=document.getElementById('nextCv'), $startOverlay=document.getElementById('startOverlay'),
+      $modeNote=document.getElementById('modeNote');
 try{ best=parseInt(localStorage.getItem('watermelon_best')||'0',10)||0; }catch(e){}
 $best.textContent=best;
 
@@ -460,6 +527,7 @@ function startGame(){
   paused=false; $pauseOverlay.classList.remove('show'); // 若在暂停中重开，先解除暂停
   $pauseBtn.disabled=false; // 游戏开始，暂停按钮可用
   fruits=[]; effects=[]; score=0; over=false; overTimer=0; submitted=false;
+  resetPowerState(); // 道具库存/使用标记/瞄准态清零
   $score.textContent="0"; $overlay.classList.remove('show');
   $startOverlay.classList.remove('show');
   $lbOverlay.classList.remove('show');
@@ -474,7 +542,8 @@ function gameOver(){
   $overlay.classList.add('show');
   submitted=false; $submitTip.textContent=""; $submitScoreBtn.disabled=false;
   $nameInput.value = localStorage.getItem('watermelon_name')||"";
-  if(score>0) lbLocalAdd(($nameInput.value||"").trim()||"本机玩家", score); // 自动记入本机纪录榜
+  $modeNote.textContent = powerUsed ? "本局使用过道具，将计入「道具挑战榜」" : "本局未使用道具，将计入「全服榜」";
+  if(score>0) lbLocalAdd(($nameInput.value||"").trim()||"本机玩家", score, powerUsed?'power':'classic'); // 自动记入本机纪录榜
   if(score>best){ best=score; try{localStorage.setItem('watermelon_best',best);}catch(e){} $best.textContent=best; }
 }
 function dropPending(){
@@ -498,11 +567,12 @@ function saveRun(){
   if(!running || over) return;
   try{
     localStorage.setItem(RUN_KEY, JSON.stringify({
-      v:1,
+      v:2,
       fruits: fruits.map(f=>({x:+f.x.toFixed(1), y:+f.y.toFixed(1),
                               vx:+f.vx.toFixed(2), vy:+f.vy.toFixed(2), r:f.r, type:f.type})),
       pending: pending ? {x:+pending.x.toFixed(1), type:pending.type} : null,
-      nextType: nextType, score: score, lastAimX: lastAimX
+      nextType: nextType, score: score, lastAimX: lastAimX,
+      powerInv: powerInv, powerUsed: powerUsed
     }));
   }catch(e){}
 }
@@ -510,7 +580,7 @@ function clearRun(){ try{ localStorage.removeItem(RUN_KEY); }catch(e){} }
 function tryRestoreRun(){
   let d=null;
   try{ d=JSON.parse(localStorage.getItem(RUN_KEY)||'null'); }catch(e){}
-  if(!d || d.v!==1 || !Array.isArray(d.fruits) || d.fruits.length>80){ clearRun(); return false; }
+  if(!d || (d.v!==1 && d.v!==2) || !Array.isArray(d.fruits) || d.fruits.length>80){ clearRun(); return false; }
   const ok = d.fruits.length===0 || d.fruits.every(f=>
     f && Number.isFinite(f.x) && Number.isFinite(f.y) && Number.isFinite(f.r)
     && Number.isInteger(f.type) && f.type>=0 && f.type<RADII.length);
@@ -525,6 +595,15 @@ function tryRestoreRun(){
     ? {x:Math.max(RADII[d.pending.type], Math.min(W-RADII[d.pending.type], d.pending.x)), type:d.pending.type}
     : null;
   if(!pending) spawnPending();          // 快照里没有待落水果（小概率）→ 现补一颗
+  // 恢复道具状态（v1 无此字段 → 默认零库存、未使用）
+  powerInv = (d.powerInv && Number.isInteger(d.powerInv.pluck) && Number.isInteger(d.powerInv.same) && Number.isInteger(d.powerInv.shuffle))
+    ? {pluck:Math.max(0,Math.min(POWERUP_MAX,d.powerInv.pluck)),
+       same:Math.max(0,Math.min(POWERUP_MAX,d.powerInv.same)),
+       shuffle:Math.max(0,Math.min(POWERUP_MAX,d.powerInv.shuffle))}
+    : {pluck:0, same:0, shuffle:0};
+  powerUsed = !!d.powerUsed; aimMode=null; aimHover=null;
+  updatePowerUI();
+  graceFrames = 90; // 恢复时水果可能仍较高，给危险线判定一段宽限
   $score.textContent = score;
   paintFruitTo($nextCv, nextType);
   $startOverlay.classList.remove('show');
@@ -591,6 +670,12 @@ function step(){
           const sc = SCORES[nt];
           score += sc; $score.textContent = score;
           effects.push({x:mx, y:my, r:RADII[nt]*0.55, alpha:1, txt:"+"+sc, color:"#C97A63"});
+          const unlock = POWERUP_UNLOCK[nt];
+          if(unlock && powerInv[unlock] < POWERUP_MAX){
+            powerInv[unlock]++;
+            effects.push({x:mx, y:my+RADII[nt]*0.9, r:RADII[nt]*0.5, alpha:1, txt:POWERUP_DEFS[unlock].icon+' '+POWERUP_DEFS[unlock].label, color:"#5E8A4E"});
+            updatePowerUI();
+          }
         }else{
           score += 100; $score.textContent = score;
           effects.push({x:mx, y:my, r:RADII[9]*0.7, alpha:1, txt:"+100", color:"#7FA86B"});
@@ -601,8 +686,11 @@ function step(){
   }
 
   let above=false;
-  for(const f of fruits){ if(f.y - f.r < DANGER_Y) above=true; }
-  if(above){ overTimer++; if(overTimer > 80) gameOver(); } else overTimer=0;
+  if(graceFrames>0){ graceFrames--; } // 宽限期内跳过危险线判定（洗牌/恢复撒落水果期间）
+  else{
+    for(const f of fruits){ if(f.y - f.r < DANGER_Y) above=true; }
+    if(above){ overTimer++; if(overTimer > 80) gameOver(); } else overTimer=0;
+  }
 
   for(const e of effects){ e.r += 3.0; e.alpha -= 0.03; }
   effects = effects.filter(e=>e.alpha>0);
@@ -640,6 +728,19 @@ function draw(){
     ctx.restore();
   }
 
+  // 瞄准态：悬停水果描边高亮；同类消时同类型一起亮
+  if(aimMode && aimHover!=null){
+    const f=fruits[aimHover]; if(f){
+      const targets = aimMode==='same' ? fruits.filter(x=>x.type===f.type) : [f];
+      ctx.save();
+      for(const t of targets){
+        ctx.strokeStyle="rgba(231,161,124,.95)"; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.arc(t.x, t.y, t.r+4, 0, Math.PI*2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
   for(const e of effects){
     ctx.save(); ctx.globalAlpha = Math.max(0, e.alpha);
     ctx.strokeStyle = "#7FA86B"; ctx.lineWidth = 3;
@@ -656,8 +757,24 @@ function pointerX(e){
   const cx = (clientX - r.left) * (W / r.width);   // 显示像素 → 逻辑坐标 W
   return Math.max(RADII[0], Math.min(W-RADII[0], cx));
 }
-cv.addEventListener('pointermove', e=>{ if(pending && !over && !paused){ pending.x = pointerX(e); lastAimX = pending.x; } });
+function pointerPos(e){ // 完整指针坐标（含 Y，供瞄准态命中判断）
+  const r = cv.getBoundingClientRect();
+  const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+  const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+  return {x:(clientX-r.left)*(W/r.width), y:(clientY-r.top)*(H/r.height)};
+}
+function fruitAt(x,y){ // 命中的水果索引（取最上层 = 最后命中）
+  let hit=null;
+  for(let i=0;i<fruits.length;i++){ if(Math.hypot(fruits[i].x-x, fruits[i].y-y) <= fruits[i].r) hit=i; }
+  return hit;
+}
+cv.addEventListener('pointermove', e=>{
+  if(aimMode && !paused){ const p=pointerPos(e); aimHover = fruitAt(p.x,p.y); return; }
+  if(pending && !over && !paused){ pending.x = pointerX(e); lastAimX = pending.x; }
+});
 cv.addEventListener('pointerdown', e=>{
+  // 瞄准态：命中水果则施放，点空白取消；绝不掉落新水果
+  if(aimMode && !paused){ const p=pointerPos(e); resolvePowerAim(fruitAt(p.x,p.y)); return; }
   // 落点即为"点击/落指处"：先用指针当前位置更新瞄准位，再落子，避免回中需二次移动
   if(running && !over && !paused && pending){ lastAimX = pending.x = pointerX(e); dropPending(); }
 });
@@ -698,6 +815,60 @@ window.addEventListener('keydown', e=>{
   if(paused && (e.key===' ' || e.key==='Enter')){ e.preventDefault(); resumeGame(); }
 });
 
+/* ===== 道具系统：UI 与交互（2.0 合成解锁） ===== */
+const $pw = {
+  pluck: document.getElementById('pwPluck'),
+  same: document.getElementById('pwSame'),
+  shuffle: document.getElementById('pwShuffle'),
+};
+function updatePowerUI(){
+  for(const k in $pw){
+    const slot=$pw[k], cnt=powerInv[k];
+    slot.querySelector('.pw-cnt').textContent = cnt;
+    slot.classList.toggle('empty', cnt<=0);
+    slot.classList.toggle('aim', aimMode===k);
+    // 可点 = 游戏中且库存>0；瞄准态下当前道具始终可点（用于取消）
+    slot.disabled = !(running && !over && !paused && cnt>0) && aimMode!==k;
+  }
+}
+function resetPowerState(){
+  powerInv={pluck:0,same:0,shuffle:0}; powerUsed=false; aimMode=null; aimHover=null;
+  updatePowerUI();
+}
+function activatePower(kind){
+  if(!running || over || paused) return;
+  if(powerInv[kind]<=0) return;
+  if(kind==='shuffle'){ // 洗牌：全场效果，立即施放
+    aimMode=null; aimHover=null;
+    powerInv.shuffle--; powerUsed=true; doShuffle(); updatePowerUI(); return;
+  }
+  aimMode = (aimMode===kind) ? null : kind; // 再点一次取消瞄准
+  aimHover=null;
+  updatePowerUI();
+}
+function resolvePowerAim(idx){
+  if(idx==null){ aimMode=null; aimHover=null; updatePowerUI(); return; } // 点空白 → 取消
+  const f=fruits[idx];
+  if(aimMode==='pluck'){ fruits.splice(idx,1); powerInv.pluck--; }
+  else if(aimMode==='same'){ const t=f.type; fruits=fruits.filter(x=>x.type!==t); powerInv.same--; }
+  powerUsed=true;
+  aimMode=null; aimHover=null; updatePowerUI();
+}
+function doShuffle(){ // 洗牌 = 顶部重新撒落：清空速度、随机 x、错开负 y，让物理自己重新堆叠
+  const sorted=[...fruits].sort((a,b)=>a.r-b.r); // 大的先撒，避免压住小水果
+  sorted.forEach((f,i)=>{
+    f.x = f.r + Math.random()*(W-2*f.r);
+    f.y = TOP_Y - (i%5)*RADII[8]*0.55 - 26 - Math.random()*18;
+    f.vx = (Math.random()-0.5)*0.6; f.vy=0; f.merged=false;
+  });
+  fruits=sorted;
+  graceFrames=180; // 撒落期间短暂高于危险线，给足下落时间避免误判
+}
+$pw.pluck.onclick=()=>activatePower('pluck');
+$pw.same.onclick=()=>activatePower('same');
+$pw.shuffle.onclick=()=>activatePower('shuffle');
+updatePowerUI();
+
 /* ===== 云端排行榜（Supabase / PostgREST 兼容 REST）=====
  * 免费接入（Supabase 免费层：永久免费、无需信用卡、500MB 库 + API 请求不限量）：
  * 1. supabase.com 注册（GitHub 或邮箱登录，免绑卡）→ New project（区域选 Singapore 最近）
@@ -710,15 +881,22 @@ window.addEventListener('keydown', e=>{
  * 建表与权限 SQL（2026-05-30 后新项目必须显式 grant，否则 REST 读不到表）：
  *   create table score(
  *     id bigint generated by default as identity primary key,
- *     name text not null unique,
+ *     name text not null,
  *     score int not null default 0 check (score between 0 and 999999),
+ *     mode text not null default 'classic',           -- classic=全服榜(纯净) / power=道具挑战榜
  *     created_at timestamptz default now());
+ *   create unique index score_name_mode_key on score(name, mode);
  *   alter table score enable row level security;
  *   create policy "anon_ins" on score for insert to anon with check (true);
  *   create policy "anon_sel" on score for select to anon using (true);
  *   create policy "anon_upd" on score for update to anon using (true) with check (true);
  *   grant usage on schema public to anon;
  *   grant select, insert, update on table score to anon;
+ *
+ * 已建过 1.0 表的老项目，升级到 2.0 只需执行以下迁移（不影响历史数据，旧纪录归入 classic 榜）：
+ *   alter table score add column if not exists mode text not null default 'classic';
+ *   alter table score drop constraint if exists score_name_key;
+ *   create unique index if not exists score_name_mode_key on score(name, mode);
  */
 const LB_BASE = "https://fmtdcxyldjogsvvkulur.supabase.co/rest/v1";
 const LB_KEY  = "sb_publishable_ILvqXrO7r1Fr-4A5JtR-dA_mxGD-T73";  // Publishable key（可公开，配合 RLS，不是 secret/service_role）
@@ -726,17 +904,21 @@ const LB_KEY  = "sb_publishable_ILvqXrO7r1Fr-4A5JtR-dA_mxGD-T73";  // Publishabl
 const $lbOverlay=document.getElementById('lbOverlay'), $lbList=document.getElementById('lbList'),
       $nameInput=document.getElementById('nameInput'), $submitTip=document.getElementById('submitTip'),
       $submitScoreBtn=document.getElementById('submitScoreBtn'), $lbTitle=document.getElementById('lbTitle');
+const $lbTabClassic=document.getElementById('lbTabClassic'), $lbTabPower=document.getElementById('lbTabPower');
 let submitted=false;
+let lbMode='classic'; // 当前查看的榜：classic=全服榜(纯净) / power=道具挑战榜
+const LB_TITLE={classic:'🏆 全服排行榜', power:'🌪 道具挑战榜'};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const lbReady=()=>!!(LB_BASE&&LB_KEY);
 const lbHeaders=()=>({'apikey':LB_KEY,'Content-Type':'application/json'});
 const fetchT=(u,o={},ms=10000)=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);return fetch(u,{...o,signal:c.signal}).finally(()=>clearTimeout(t));};
 
-/* 本机纪录榜（云端不可达时的降级） */
-const lbLocalGet=()=>{ try{ return JSON.parse(localStorage.getItem('watermelon_local_lb')||'[]'); }catch(e){ return []; } };
-const lbLocalAdd=(name,score)=>{
+/* 本机纪录榜（按 mode 分两套，云端不可达时降级） */
+const lbKey=m=> m==='power' ? 'watermelon_local_lb_power' : 'watermelon_local_lb';
+const lbLocalGet=m=>{ try{ return JSON.parse(localStorage.getItem(lbKey(m))||'[]'); }catch(e){ return []; } };
+const lbLocalAdd=(name,score,m='classic')=>{
   const merged=new Map();
-  for(const item of lbLocalGet()){
+  for(const item of lbLocalGet(m)){
     const old=merged.get(item.name);
     if(!old || Number(item.score)>Number(old.score)) merged.set(item.name,{name:item.name,score:Number(item.score)||0});
   }
@@ -745,7 +927,7 @@ const lbLocalAdd=(name,score)=>{
   else merged.set(name,{name:name,score:score});
   const a=[...merged.values()];
   a.sort((x,y)=>y.score-x.score);
-  try{ localStorage.setItem('watermelon_local_lb',JSON.stringify(a.slice(0,10))); }catch(e){}
+  try{ localStorage.setItem(lbKey(m),JSON.stringify(a.slice(0,10))); }catch(e){}
   return merged.get(name).score;
 };
 const lbLastGet=()=>{ try{ return JSON.parse(localStorage.getItem('watermelon_last_lb')||'null'); }catch(e){ return null; } };
@@ -779,10 +961,10 @@ const scrollToMe=()=>{ // 打开榜单后自动定位到"本次"那一行
   const el=$lbList.querySelector('.lb-row.me');
   if(el) $lbList.scrollTop=el.offsetTop-$lbList.clientHeight/2+el.offsetHeight/2;
 };
-const myCloudRankHtml=async(my,items)=>{
-  if(!my || my.source==='local' || items.some(it=>it.name===my.name && Number(it.score)===Number(my.score))) return '';
+const myCloudRankHtml=async(my,items,mode)=>{
+  if(!my || my.source==='local' || my.mode!==mode || items.some(it=>it.name===my.name && Number(it.score)===Number(my.score))) return '';
   try{
-    const rank=await lbRank(my.score);
+    const rank=await lbRank(my.score,mode);
     return '<div class="lb-my-sep">我的排名</div>'+lbRowHtml(my,rank,true);
   }catch(e){
     return '<div class="lb-my-sep">我的排名暂时无法获取</div>';
@@ -797,9 +979,9 @@ const lbErr=e=>{ // 把云端失败原因翻译成人话，便于远程排查
   return '服务异常('+(m||'未知')+')';
 };
 
-async function lbSubmit(name,score){
-  const body={name:String(name).slice(0,12),score:Math.max(0,Math.min(999999,Math.floor(score)))};
-  const find=await fetchT(LB_BASE+'/score?select=id,name,score&name=eq.'+encodeURIComponent(body.name)+'&limit=1',{headers:lbHeaders()});
+async function lbSubmit(name,score,mode){
+  const body={name:String(name).slice(0,12),score:Math.max(0,Math.min(999999,Math.floor(score))),mode};
+  const find=await fetchT(LB_BASE+'/score?select=id,name,score&name=eq.'+encodeURIComponent(body.name)+'&mode=eq.'+mode+'&limit=1',{headers:lbHeaders()});
   if(!find.ok) throw new Error('http '+find.status);
   const existing=(await find.json())[0];
   if(existing && Number(existing.score)>=body.score){
@@ -814,62 +996,73 @@ async function lbSubmit(name,score){
   if(!res.ok) throw new Error('http '+res.status);
   return {score:body.score,improved:true};
 }
-async function lbRank(score){ // 我的全服名次 = 比我分高的人数 + 1
-  const res=await fetchT(LB_BASE+'/score?select=score&score=gt.'+score,{headers:lbHeaders()});
+async function lbRank(score,mode){ // 我的名次 = 同榜比我分高的人数 + 1
+  const res=await fetchT(LB_BASE+'/score?select=score&score=gt.'+score+'&mode=eq.'+mode,{headers:lbHeaders()});
   if(!res.ok) throw new Error('http '+res.status);
   const d=await res.json(); return d.length+1;
 }
-async function openLb(){
-  $lbOverlay.classList.add('show');
-  const local=lbLocalGet();
+function setLbTab(mode){
+  lbMode=mode;
+  $lbTabClassic.classList.toggle('active', mode==='classic');
+  $lbTabPower.classList.toggle('active', mode==='power');
+  $lbTitle.textContent = LB_TITLE[mode];
+}
+async function renderLb(){
+  const mode=lbMode;
+  setLbTab(mode);
+  const local=lbLocalGet(mode);
   const my=lbLastGet();
+  const mySrc = my && my.mode===mode ? my : null;
   if(!lbReady()){
-    $lbTitle.textContent="本机纪录榜";
-    const mySrc=my&&my.source==='local'?my:null;
     $lbList.innerHTML='<div class="lb-empty">云端排行榜配置中<br>当前为本机纪录模式</div>'+
       (local.length?rowsHtml(local,mySrc):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
       (mySrc&&!inItems(mySrc,local)?myLocalRankHtml(mySrc,local):'');
     scrollToMe();
     return;
   }
-  $lbTitle.textContent="🏆 全服排行榜";
   $lbList.innerHTML='<div class="lb-empty">加载中…</div>';
   try{
-    const res=await fetchT(LB_BASE+'/score?select=name,score&order=score.desc&limit=10',{headers:lbHeaders()});
+    const res=await fetchT(LB_BASE+'/score?select=name,score&mode=eq.'+mode+'&order=score.desc&limit=10',{headers:lbHeaders()});
     if(!res.ok) throw new Error('http '+res.status);
     const data=await res.json();
-    const topHtml=data.length?rowsHtml(data,my):'<div class="lb-empty">还没有人上榜<br>快来抢第一吧！</div>';
-    $lbList.innerHTML=topHtml+await myCloudRankHtml(my,data);
+    const topHtml=data.length?rowsHtml(data,mySrc):'<div class="lb-empty">还没有人上榜<br>快来抢第一吧！</div>';
+    $lbList.innerHTML=topHtml+await myCloudRankHtml(mySrc,data,mode);
     scrollToMe();
   }catch(e){ // 云端不可达 → 降级本机榜
-    $lbTitle.textContent="本机纪录榜";
-    const mySrc=my&&my.source==='local'?my:null;
-    $lbList.innerHTML=(local.length?rowsHtml(local,mySrc):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
-      (mySrc&&!inItems(mySrc,local)?myLocalRankHtml(mySrc,local):'')+
+    const mySrc2 = my && my.source==='local' && my.mode===mode ? my : null;
+    $lbList.innerHTML=(local.length?rowsHtml(local,mySrc2):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
+      (mySrc2&&!inItems(mySrc2,local)?myLocalRankHtml(mySrc2,local):'')+
       '<div class="lb-empty">（云端不可用：'+lbErr(e)+'，显示本机纪录）</div>';
     scrollToMe();
   }
 }
+async function openLb(){
+  $lbOverlay.classList.add('show');
+  renderLb();
+}
 async function onSubmitScore(){
   if(submitted||!over) return;
   const name=($nameInput.value||"").trim().slice(0,12)||"神秘玩家";
+  const mode = powerUsed ? 'power' : 'classic';
   try{ localStorage.setItem('watermelon_name',name); }catch(e){}
   if(!lbReady()){ $submitTip.textContent="排行榜服务尚未配置，暂无法上传"; return; }
   submitted=true; $submitScoreBtn.disabled=true; $submitTip.textContent="上传中…";
   try{
-    const result=await lbSubmit(name,score);
-    lbLastSet({name:name,score:result.score,source:'cloud'});
+    const result=await lbSubmit(name,score,mode);
+    lbLastSet({name:name,score:result.score,mode:mode,source:'cloud'});
     let rankTxt="已记录";
-    try{ rankTxt="全服第 "+(await lbRank(result.score))+" 名"; }catch(e){}
+    try{ rankTxt=(mode==='power'?"道具榜第 ":"全服第 ")+(await lbRank(result.score,mode))+" 名"; }catch(e){}
     $submitTip.textContent=(result.improved?"最高分已更新！":"已有更高或相同成绩，保留原记录。")+rankTxt;
-    openLb();
+    lbMode=mode; openLb();
   }catch(e){
-    const localScore=lbLocalAdd(name,score); // 云端不可达 → 记入本机纪录
-    lbLastSet({name:name,score:localScore,source:'local'});
+    const localScore=lbLocalAdd(name,score,mode); // 云端不可达 → 记入本机纪录
+    lbLastSet({name:name,score:localScore,mode:mode,source:'local'});
     submitted=false; $submitScoreBtn.disabled=false;
     $submitTip.textContent="云端暂不可达（"+lbErr(e)+"），已记入本机榜单";
   }
 }
+$lbTabClassic.onclick=()=>{ setLbTab('classic'); renderLb(); };
+$lbTabPower.onclick=()=>{ setLbTab('power'); renderLb(); };
 document.getElementById('lbBtn').onclick          = openLb;
 document.getElementById('lbClose').onclick        = ()=> $lbOverlay.classList.remove('show');
 $submitScoreBtn.onclick                           = onSubmitScore;
