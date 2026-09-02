@@ -248,7 +248,7 @@
       <img class="stage-frame" src="assets/frame_ring_sage.svg" alt="" onerror="this.style.display='none'" />
       <div class="stage-wrap">
         <canvas id="game" width="440" height="600"></canvas>
-        <div class="restore-toast" id="restoreToast">🔄 已恢复上次未完成的一局</div>
+        <div class="restore-toast" id="restoreToast">已恢复上次未完成的一局</div>
         <div class="overlay" id="overlay">
           <h2>游戏结束</h2>
           <div class="final">本局得分 <b id="finalScore">0</b></div>
@@ -813,7 +813,7 @@ async function openLb(){
   const local=lbLocalGet();
   const my=lbLastGet();
   if(!lbReady()){
-    $lbTitle.textContent="📱 本机纪录榜";
+    $lbTitle.textContent="本机纪录榜";
     const mySrc=my&&my.source==='local'?my:null;
     $lbList.innerHTML='<div class="lb-empty">云端排行榜配置中<br>当前为本机纪录模式</div>'+
       (local.length?rowsHtml(local,mySrc):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
@@ -831,7 +831,7 @@ async function openLb(){
     $lbList.innerHTML=topHtml+await myCloudRankHtml(my,data);
     scrollToMe();
   }catch(e){ // 云端不可达 → 降级本机榜
-    $lbTitle.textContent="📱 本机纪录榜";
+    $lbTitle.textContent="本机纪录榜";
     const mySrc=my&&my.source==='local'?my:null;
     $lbList.innerHTML=(local.length?rowsHtml(local,mySrc):'<div class="lb-empty">本机还没有纪录<br>先玩一局吧！</div>')+
       (mySrc&&!inItems(mySrc,local)?myLocalRankHtml(mySrc,local):'')+
