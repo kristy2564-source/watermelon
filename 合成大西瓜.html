@@ -168,6 +168,9 @@
   .name-input:focus{border-color:var(--sage-d,#5E8A4E); box-shadow:0 0 0 3px rgba(127,168,107,.18);}
   .submit-row .btn{padding:10px 16px; font-size:14px;}
   .submit-row .btn:disabled{opacity:.55; cursor:default;}
+  /* 2.5 结束页双出口：主按钮「再来一局」+ 次按钮「换个模式」，横向并排等宽 */
+  .restart-row{display:flex; gap:10px; width:min(280px,82%); margin-top:2px;}
+  .restart-row .btn{flex:1; padding:12px 10px; font-size:15px;}
   .submit-tip{font-size:12px; color:var(--sub); min-height:16px; margin-top:-6px;}
   .lb-card{
     width:min(320px,86%); max-height:100%; background:var(--card);
@@ -328,7 +331,7 @@
       <button class="btn ghost btn-ico" id="pauseBtn" disabled title="游戏开始后可暂停" aria-label="暂停">
         <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><rect x="6" y="4" width="4.6" height="16" rx="2.2" fill="currentColor"/><rect x="13.4" y="4" width="4.6" height="16" rx="2.2" fill="currentColor"/></svg>
       </button>
-      <button class="btn ghost" id="restartTop">重新开始</button>
+      <button class="btn ghost" id="restartTop" title="结束当前局，回到模式选择界面">重新开始</button>
     </div>
   </header>
 
@@ -360,7 +363,11 @@
           </div>
           <div class="submit-tip" id="submitTip"></div>
           <div class="mode-note" id="modeNote"></div>
-          <button class="btn" id="restartBtn">再来一局</button>
+          <!-- 2.5 结束页给出两条出路：同模式速开一局 / 回主界面换个模式 -->
+          <div class="restart-row">
+            <button class="btn" id="restartBtn">再来一局</button>
+            <button class="btn ghost" id="backHomeBtn">换个模式</button>
+          </div>
         </div>
 
         <div class="start-overlay show" id="startOverlay">
@@ -615,6 +622,29 @@ function spawnPending(){
   const t = nextType; nextType = weightedType(t);
   pending = {x: (lastAimX!=null ? Math.max(RADII[t], Math.min(W-RADII[t], lastAimX)) : W/2), type: t};
   paintFruitTo($nextCv, nextType);
+}
+/* ===== 2.5 回到主界面（重新开始 = 重新选模式）=====
+ * 顶部「重新开始」与结束页「换个模式」都走这里。
+ * 与 startGame() 的区别：startGame 是「沿用当前模式直接再来一局」，这里是「收起当前局、回到开场页重新选模式」。
+ * 清空本局状态与临时缓存 → 收起所有弹层 → 显示开场页（沿用上次所选模式，玩家可一键切换）。 */
+function backToStart(){
+  cancelPowerCast(false);   // 进行中的道具预告作废（本局已结束，不退还库存与次数）
+  uiBlocked=false; pendingPower=null;
+  const pc=document.getElementById('pwConfirm'); if(pc) pc.classList.remove('show');
+  running=false; over=false; paused=false; overTimer=0; submitted=false;
+  fruits=[]; effects=[]; score=0; pending=null; graceFrames=0; powerCast=null;
+  resetPowerState();        // 道具库存 / 已用次数 / 预告态清零
+  clearRun();               // 本局快照作废：回到主界面即代表旧局结束，刷新不会再把旧局捞回来
+  $score.textContent="0";
+  $overlay.classList.remove('show');
+  $pauseOverlay.classList.remove('show');
+  $lbOverlay.classList.remove('show');
+  $pauseBtn.disabled=true;  // 未开局不可暂停
+  nextType = weightedType(); paintFruitTo($nextCv, nextType);
+  lastDropTime = -9999;     // 防止回主界面后误落子
+  setMode(gameMode);        // 沿用上次所选模式，同步引导文案 / 开始按钮 / 身体模式类
+  $startOverlay.classList.add('show');
+  updatePowerUI();
 }
 function startGame(){
   clearRun(); // 新一局开始，释放上一局的临时缓存
@@ -966,8 +996,9 @@ $modePick.addEventListener('click', e=>{
   setMode(btn.dataset.mode);
 });
 setMode('classic'); // 初始默认经典模式（CSS 同时隐藏道具栏）
-document.getElementById('restartBtn').onclick  = startGame;
-document.getElementById('restartTop').onclick= startGame;
+document.getElementById('restartBtn').onclick  = startGame;    // 结束页：沿用当前模式速开一局
+document.getElementById('restartTop').onclick = backToStart;   // 2.5 顶部「重新开始」：回主界面重新选模式
+document.getElementById('backHomeBtn').onclick= backToStart;   // 2.5 结束页「换个模式」：同上
 
 /* ===== 暂停 / 继续 =====
  * 仅游戏进行中（running 且未结束）可暂停，按钮其余时间 disabled，防误触。
