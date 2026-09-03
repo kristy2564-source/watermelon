@@ -228,8 +228,13 @@
   }
   .restore-toast.show{opacity:1;}
 
+  /* ===== 2.3 本局道具用量（一局最多 6 个）===== */
+  .pw-budget{text-align:center; font-size:11.5px; font-weight:700; color:var(--sub); margin-top:10px; letter-spacing:.3px;}
+  .pw-budget.max{color:var(--danger);}
+  body.mode-classic .pw-budget{display:none;}
+
   /* ===== 道具栏（2.0 合成解锁） ===== */
-  .power-bar{display:flex; justify-content:center; gap:10px; margin-top:12px;}
+  .power-bar{display:flex; justify-content:center; gap:10px; margin-top:6px;}
   .power-slot{
     position:relative; display:flex; flex-direction:column; align-items:center; gap:3px;
     width:66px; padding:9px 6px 8px; background:var(--card); border:1.5px solid var(--sage);
@@ -331,8 +336,10 @@
       <img class="stage-frame" src="assets/frame_ring_sage.svg" alt="" onerror="this.style.display='none'" />
       <div class="stage-wrap">
         <canvas id="game" width="440" height="600"></canvas>
+        <!-- 2.3 本局道具用量提示：一局最多 6 个 -->
+        <div class="pw-budget" id="pwBudget">✨ 本局道具 0/6 · 还剩 6 次</div>
         <div class="power-bar" id="powerBar">
-          <button class="power-slot" id="pwPluck" disabled title="摘除：随机移除场上一个水果（可能是任何一个）">
+          <button class="power-slot" id="pwPluck" disabled title="摘除：随机移除场上一个水果（可能是任何一个），确认后 3 秒生效">
             <span class="pw-icon">🍃</span><span class="pw-nm">摘除</span><span class="pw-cnt">0</span>
           </button>
           <button class="power-slot" id="pwSame" disabled title="同类消：随机锁定场上某一类水果，整类全部消除">
@@ -552,10 +559,15 @@ const POWERUP_DEFS = {
 };
 const POWERUP_UNLOCK = {3:'pluck', 6:'same', 7:'shuffle'}; // 合成出 橘子/桃子/菠萝 时获得
 const POWERUP_MAX = 2;
+const POWER_RUN_LIMIT = 6;      // 2.3 一局最多使用 6 个道具（用完即锁，不论库存还剩多少）
+const POWER_CAST_FRAMES = 180;  // 2.3 确认后 3 秒预告（60fps×3s）：先标记目标，再慢放生效
+const FADE_FRAMES = 46;         // 2.3 水果消散动画时长（≈0.77s，比原先"瞬间消失"更看得清）
 let powerInv = {pluck:0, same:0, shuffle:0};
 let powerUsed = false;  // 本局是否使用过任意道具
+let powerUseCount = 0;  // 2.3 本局已使用道具次数（上限 POWER_RUN_LIMIT，刷新恢复后仍累计）
 let uiBlocked = false;   // 2.2 道具确认弹窗打开期间冻结物理，避免弹窗时水果继续运动 / 误判危险线
 let pendingPower = null; // 2.2 待确认使用的道具 kind（'pluck' | 'same' | 'shuffle'）
+let powerCast = null;    // 2.3 生效中的道具预告 {kind, left, type?} —— left 为剩余帧数
 let graceFrames = 0;    // 危险线宽限帧：洗牌/恢复时水果短暂高于危险线，避免误判游戏结束
 
 setupCanvas();
@@ -583,6 +595,8 @@ const GUIDE_POWER_HTML   = '• 移动鼠标 / 手指瞄准落点，点击放下
   + '• 合成出橘子 / 桃子 / 菠萝，会获得对应道具<br>'
   + '• 道具：🍃摘除 · 🔮同类消 · 🌪洗牌（合成解锁）<br>'
   + '• <span class="hi">道具效果随机，无法指定目标</span>，使用前会二次确认<br>'
+  + '• 确认后 <span class="hi">3 秒后生效</span>，期间会标出被选中的水果<br>'
+  + '• <span class="hi">每局最多使用 6 个道具</span>，用完即止<br>'
   + '<span class="hi">• 水果堆过顶部危险线即结束，挑战极限吧！</span>';
 function weightedType(exclude){
   const pool=[0,0,0,0,1,1,1,2,2,3,4];
@@ -649,11 +663,12 @@ function saveRun(){
     localStorage.setItem(RUN_KEY, JSON.stringify({
       v:3,
       gameMode: gameMode, // 2.1：恢复时同步身体模式类与道具栏可见性
-      fruits: fruits.map(f=>({x:+f.x.toFixed(1), y:+f.y.toFixed(1),
+      // 2.3 消散中的水果不写入快照（它们注定消失，避免刷新后"复活"）
+      fruits: fruits.filter(f=>!f.dying).map(f=>({x:+f.x.toFixed(1), y:+f.y.toFixed(1),
                               vx:+f.vx.toFixed(2), vy:+f.vy.toFixed(2), r:f.r, type:f.type})),
       pending: pending ? {x:+pending.x.toFixed(1), type:pending.type} : null,
       nextType: nextType, score: score, lastAimX: lastAimX,
-      powerInv: powerInv, powerUsed: powerUsed
+      powerInv: powerInv, powerUsed: powerUsed, powerUseCount: powerUseCount // 2.3 次数持久化，刷新不能绕过上限
     }));
   }catch(e){}
 }
@@ -683,6 +698,9 @@ function tryRestoreRun(){
        shuffle:Math.max(0,Math.min(POWERUP_MAX,d.powerInv.shuffle))}
     : {pluck:0, same:0, shuffle:0};
   powerUsed = !!d.powerUsed; uiBlocked=false; pendingPower=null;
+  // 2.3 恢复已用次数（上限内），并丢弃未完成的预告状态（不恢复倒计时中途态，避免混乱）
+  powerUseCount = Math.max(0, Math.min(POWER_RUN_LIMIT, Math.floor(Number(d.powerUseCount))||0));
+  powerCast = null;
   updatePowerUI();
   graceFrames = 90; // 恢复时水果可能仍较高，给危险线判定一段宽限
   $score.textContent = score;
@@ -701,12 +719,14 @@ function step(){
   if(!running || paused || uiBlocked) return; // 暂停 / 道具确认弹窗打开期间冻结物理
   for(let s=0;s<SUBSTEPS;s++){
     for(const f of fruits){
+      if(f.dying) continue; // 2.3 消散中的水果脱离物理，原地缩小淡出，不再参与挤压
       f.vy += G/SUBSTEPS;
       f.x  += f.vx/SUBSTEPS;
       f.y  += f.vy/SUBSTEPS;
     }
-    for(const f of fruits){ f.vx *= DAMP; f.vy *= DAMP; }
+    for(const f of fruits){ if(f.dying) continue; f.vx *= DAMP; f.vy *= DAMP; }
     for(const f of fruits){
+      if(f.dying) continue;
       if(f.y + f.r > H){ f.y = H - f.r; if(f.vy>0) f.vy = -f.vy * REST_GROUND; f.vx *= GROUND_FRIC; }
       if(f.x - f.r < 0){ f.x = f.r;     if(f.vx<0) f.vx = -f.vx * REST_GROUND; }
       if(f.x + f.r > W){ f.x = W - f.r; if(f.vx>0) f.vx = -f.vx * REST_GROUND; }
@@ -715,7 +735,7 @@ function step(){
     for(let i=0;i<fruits.length;i++){
       const a=fruits[i]; if(a.merged) continue;
       for(let j=i+1;j<fruits.length;j++){
-        const b=fruits[j]; if(b.merged) continue;
+        const b=fruits[j]; if(b.merged || b.dying) continue;
         const dx=b.x-a.x, dy=b.y-a.y;
         const d = Math.hypot(dx,dy);
         const min = a.r + b.r;
@@ -774,11 +794,21 @@ function step(){
   let above=false;
   if(graceFrames>0){ graceFrames--; } // 宽限期内跳过危险线判定（洗牌/恢复撒落水果期间）
   else{
-    for(const f of fruits){ if(f.y - f.r < DANGER_Y) above=true; }
+    for(const f of fruits){ if(!f.dying && f.y - f.r < DANGER_Y) above=true; } // 消散中的水果不计入危险线
     if(above){ overTimer++; if(overTimer > 80) gameOver(); } else overTimer=0;
   }
 
-  for(const e of effects){ e.r += 3.0; e.alpha -= 0.03; }
+  // 2.3 道具预告倒计时：确认后等 3 秒才真正生效（暂停/弹窗时随 step 一起冻结）
+  if(powerCast){
+    powerCast.left--;
+    if(powerCast.left<=0) resolvePowerCast();
+  }
+  // 2.3 消散动画推进：dying 0→1，到 1 才真正移除，肉眼能看清"被消掉的是谁"
+  let dyingN=0;
+  for(const f of fruits){ if(f.dying){ f.dying += 1/FADE_FRAMES; if(f.dying>=1) f.dying=1; dyingN++; } }
+  if(dyingN) fruits = fruits.filter(f=>!(f.dying>=1));
+
+  for(const e of effects){ e.r += 1.7; e.alpha -= 0.013; } // 2.3 飘字放慢：原扩散/淡出太快看不清
   effects = effects.filter(e=>e.alpha>0);
 
   if(++saveTick >= 90){ saveTick=0; saveRun(); } // 每 ~1.5s 快照一次本局状态
@@ -796,12 +826,41 @@ function draw(){
   ctx.restore();
 
   for(const f of fruits){
+    // 2.3 消散中：整体缩小 + 淡出，慢放让人看清被消掉的是谁
+    const fade = f.dying ? (1 - f.dying) : 1;
+    const sc   = f.dying ? (1 - f.dying*0.7) : 1;
+    if(fade<=0) continue;
     // 柔和投影：增强堆叠层次，让水果彼此分开
     const sg = ctx.createRadialGradient(f.x, f.y + f.r*0.5, f.r*0.2, f.x, f.y + f.r*0.5, f.r*1.05);
     sg.addColorStop(0, 'rgba(80,90,70,0.15)'); sg.addColorStop(1, 'rgba(80,90,70,0)');
     ctx.fillStyle = sg;
-    ctx.beginPath(); ctx.ellipse(f.x, f.y + f.r*0.55, f.r*0.92, f.r*0.7, 0, 0, Math.PI*2); ctx.fill();
-    ctx.save(); ctx.translate(f.x, f.y); drawFruitShape(ctx, f.type, f.r); ctx.restore();
+    ctx.beginPath(); ctx.ellipse(f.x, f.y + f.r*0.55, f.r*0.92*sc, f.r*0.7*sc, 0, 0, Math.PI*2); ctx.fill();
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.translate(f.x, f.y); ctx.scale(sc, sc);
+    drawFruitShape(ctx, f.type, f.r);
+    ctx.restore();
+  }
+
+  /* ===== 2.3 道具预告：被锁定的目标「脉动光环 + 收缩环」，3 秒内看得见、看得清 ===== */
+  if(powerCast){
+    const prog = 1 - powerCast.left/POWER_CAST_FRAMES;      // 0→1
+    const pulse = 0.55 + 0.45*Math.sin(prog*Math.PI*7);     // 脉动呼吸
+    const col = powerCast.kind==='same' ? '122,92,142' : (powerCast.kind==='shuffle' ? '78,127,138' : '94,138,78');
+    for(const f of fruits){
+      if(!f.marked) continue;
+      ctx.save();
+      ctx.strokeStyle = 'rgba('+col+','+(0.35+0.45*pulse).toFixed(2)+')';
+      ctx.lineWidth = 2.4; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r+4, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      // 收缩环：随倒计时从外向内收拢，收拢到位即消除
+      const rr = f.r + 6 + (1-prog)*(f.r*1.5);
+      ctx.globalAlpha = 0.35 + 0.5*prog;
+      ctx.strokeStyle = 'rgba('+col+',1)'; ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.arc(f.x, f.y, rr, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
   }
 
   if(pending && !over){
@@ -822,6 +881,31 @@ function draw(){
     ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.stroke();
     ctx.fillStyle = e.color || "#3E4A36"; ctx.font = "bold 16px 'Noto Serif SC',serif"; ctx.textAlign="center";
     ctx.fillText(e.txt, e.x, e.y - e.r - 6);
+    ctx.restore();
+  }
+
+  /* ===== 2.3 倒计时胶囊：顶部居中显示「道具名 + 剩余秒数 + 进度条」 ===== */
+  if(powerCast){
+    const d = POWERUP_DEFS[powerCast.kind] || {icon:'✨', label:'道具'};
+    const prog = Math.max(0, Math.min(1, 1 - powerCast.left/POWER_CAST_FRAMES));
+    const secs = Math.max(1, Math.ceil(powerCast.left/60));
+    const bw=158, bh=32, bx=(W-bw)/2, by=8;
+    ctx.save();
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(bx,by,bw,bh,16); else ctx.rect(bx,by,bw,bh);
+    ctx.fillStyle='rgba(255,253,247,.95)'; ctx.fill();
+    ctx.strokeStyle='rgba(127,168,107,.9)'; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.textAlign='left';  ctx.fillStyle='#3E4A36'; ctx.font="bold 13px 'Noto Serif SC',serif";
+    ctx.fillText(d.icon+' '+d.label+' 即将生效', bx+13, by+14);
+    ctx.textAlign='right'; ctx.fillStyle='#C97A63'; ctx.font="bold 13px 'Noto Serif SC',serif";
+    ctx.fillText(secs+'s', bx+bw-13, by+14);
+    ctx.beginPath(); // 进度条：走满即生效
+    const pbx=bx+13, pbw=bw-26, pby=by+bh-9;
+    if(ctx.roundRect) ctx.roundRect(pbx,pby,pbw,4,2); else ctx.rect(pbx,pby,pbw,4);
+    ctx.fillStyle='rgba(127,168,107,.22)'; ctx.fill();
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(pbx,pby,Math.max(3,pbw*prog),4,2); else ctx.rect(pbx,pby,Math.max(3,pbw*prog),4);
+    ctx.fillStyle='#5E8A4E'; ctx.fill();
     ctx.restore();
   }
 }
@@ -903,17 +987,27 @@ const $pw = {
   same: document.getElementById('pwSame'),
   shuffle: document.getElementById('pwShuffle'),
 };
+const $pwBudget = document.getElementById('pwBudget'); // 2.3 本局道具用量提示
 function updatePowerUI(){
+  const left = Math.max(0, POWER_RUN_LIMIT - powerUseCount); // 2.3 本局剩余可用次数
   for(const k in $pw){
     const slot=$pw[k], cnt=powerInv[k];
     if(slot._cnt!==cnt){ slot.querySelector('.pw-cnt').textContent = cnt; slot._cnt=cnt; } // 脏检查，避免每帧写 DOM
-    slot.classList.toggle('empty', cnt<=0);
-    // 可点 = 游戏中 + 有库存 + 场上有水果（空场用任何道具都无意义）+ 确认弹窗未打开
-    slot.disabled = !(running && !over && !paused && !uiBlocked && cnt>0 && fruits.length>0);
+    slot.classList.toggle('empty', cnt<=0 || left<=0);
+    // 可点 = 游戏中 + 有库存 + 场上有水果（空场用任何道具都无意义）+ 确认弹窗/预告未进行 + 本局次数未用尽
+    slot.disabled = !(running && !over && !paused && !uiBlocked && !powerCast && cnt>0 && left>0 && fruits.length>0);
+  }
+  if($pwBudget){
+    const txt = left>0 ? ('✨ 本局道具 '+powerUseCount+'/'+POWER_RUN_LIMIT+' · 还剩 '+left+' 次')
+                       : ('本局道具已用尽 '+powerUseCount+'/'+POWER_RUN_LIMIT);
+    if($pwBudget.textContent!==txt) $pwBudget.textContent = txt; // 脏检查
+    $pwBudget.classList.toggle('max', left<=0);
   }
 }
 function resetPowerState(){
   powerInv={pluck:0,same:0,shuffle:0}; powerUsed=false; uiBlocked=false; pendingPower=null;
+  powerUseCount=0; powerCast=null;                       // 2.3 次数与预告状态清零
+  for(const f of fruits) f.marked=false;
   const c=document.getElementById('pwConfirm'); if(c) c.classList.remove('show'); // 新开一局时收起确认弹窗
   updatePowerUI();
 }
@@ -928,7 +1022,9 @@ function openPowerConfirm(kind){
   $pwCIcon.textContent=d.icon;
   $pwCName.textContent=d.label;
   $pwCDesc.innerHTML=d.descHtml;
-  $pwCStock.textContent='库存 '+powerInv[kind]+' 个 · 使用后本局计入「道具挑战榜」';
+  const left=Math.max(0, POWER_RUN_LIMIT-powerUseCount);
+  $pwCStock.innerHTML='库存 '+powerInv[kind]+' 个 · 本局还剩 <b>'+left+'</b> 次<br>'
+                     +'确认后 <b>3 秒</b> 生效，期间会标出将被消除的水果';
   $pwConfirm.classList.add('show');
   updatePowerUI();
 }
@@ -937,42 +1033,94 @@ function closePowerConfirm(){
   pendingPower=null; uiBlocked=false;
   updatePowerUI();
 }
-function activatePower(kind){ // 点道具槽 → 先弹确认窗，确认后才真正生效
-  if(!running || over || paused || uiBlocked) return;
+function activatePower(kind){ // 点道具槽 → 先弹确认窗，确认后还要等 3 秒预告才生效
+  if(!running || over || paused || uiBlocked || powerCast) return;
   if(powerInv[kind]<=0) return;
+  if(powerUseCount >= POWER_RUN_LIMIT) return; // 2.3 本局次数已用尽
   if(fruits.length===0) return; // 空场无任何可作用对象
   openPowerConfirm(kind);
 }
-function castPower(kind){ // 确认后：效果随机生效，不指定目标
+
+/* ===== 2.3 道具三段式：确认 → 3 秒预告（标出随机目标）→ 慢放生效 =====
+ * 预告期间：目标水果带脉动光环 + 收缩环，顶部胶囊显示剩余秒数与进度条；
+ * 预告结束才真正消除，消除以 dying 缩放淡出（不再瞬间消失）。
+ * 随机性保持：预告期间目标若被合成掉，生效瞬间重新随机锁定（不会"用了没反应"）。 */
+function pickPowerTargets(kind){
+  for(const f of fruits) f.marked=false;
+  const alive = fruits.filter(f=>!f.dying);
+  if(!alive.length) return;
+  if(kind==='pluck'){
+    alive[Math.floor(Math.random()*alive.length)].marked = true;   // 每个水果机会均等
+  }else if(kind==='same'){
+    const types=[...new Set(alive.map(f=>f.type))];                // 场上现存类型，等概率抽一类
+    const t = (powerCast && powerCast.type!=null && types.includes(powerCast.type))
+      ? powerCast.type                                             // 已锁定过：沿用，避免中途换类型看着跳变
+      : types[Math.floor(Math.random()*types.length)];
+    if(powerCast) powerCast.type = t;
+    for(const f of alive) if(f.type===t) f.marked=true;
+  }else{ // shuffle：全体都是"即将重排"的对象
+    for(const f of alive) f.marked=true;
+  }
+}
+function beginPowerCast(kind){ // 确认后：立即扣库存与次数，锁定随机目标，倒计时 3 秒
   if(!running || over) return;
   if(powerInv[kind]<=0 || fruits.length===0) return;
+  if(powerUseCount >= POWER_RUN_LIMIT) return;
+  powerInv[kind]--; powerUsed=true; powerUseCount++;
+  powerCast = {kind:kind, left:POWER_CAST_FRAMES, type:null};
+  pickPowerTargets(kind);
+  updatePowerUI(); saveRun(); // 用道具后立即存快照，防止刷新丢失道具状态
+}
+function resolvePowerCast(){ // 倒计时结束：真正生效（慢放消散，看得清）
+  if(!powerCast) return;
+  const kind=powerCast.kind;
+  const alive=fruits.filter(f=>!f.dying);
   if(kind==='pluck'){
-    const i=Math.floor(Math.random()*fruits.length), f=fruits[i]; // 完全随机：每个水果机会均等
-    effects.push({x:f.x, y:f.y, r:f.r*0.85, alpha:1, txt:'🍃 摘除', color:'#5E8A4E'});
-    fruits.splice(i,1);
+    const f = alive.find(x=>x.marked) || alive[Math.floor(Math.random()*alive.length)]; // 目标被合成掉了就重抽
+    if(f){ f.marked=false; f.dying=1/FADE_FRAMES;
+           effects.push({x:f.x, y:f.y, r:f.r*0.85, alpha:1, txt:'🍃 摘除', color:'#5E8A4E'}); }
   }else if(kind==='same'){
-    const types=[...new Set(fruits.map(f=>f.type))];            // 场上现存类型，等概率随机抽一类
-    const t=types[Math.floor(Math.random()*types.length)];
-    const gone=fruits.filter(f=>f.type===t);
-    const cx=gone.reduce((s,f)=>s+f.x,0)/gone.length, cy=gone.reduce((s,f)=>s+f.y,0)/gone.length;
-    effects.push({x:cx, y:cy, r:RADII[t]*1.1, alpha:1, txt:'🔮 同类消 ×'+gone.length, color:'#7A5C8E'});
-    fruits=fruits.filter(f=>f.type!==t);
+    let gone = alive.filter(f=>f.marked);
+    if(!gone.length){ // 预告期间该类被合完了 → 重新随机锁一类，保持"随机"设定
+      const types=[...new Set(alive.map(f=>f.type))];
+      if(types.length){
+        const t=types[Math.floor(Math.random()*types.length)];
+        gone = alive.filter(f=>f.type===t);
+      }
+    }
+    if(gone.length){
+      const cx=gone.reduce((s,f)=>s+f.x,0)/gone.length, cy=gone.reduce((s,f)=>s+f.y,0)/gone.length;
+      for(const f of gone){ f.marked=false; f.dying=1/FADE_FRAMES; }
+      effects.push({x:cx, y:cy, r:RADII[gone[0].type]*1.1, alpha:1, txt:'🔮 同类消 ×'+gone.length, color:'#7A5C8E'});
+    }
   }else if(kind==='shuffle'){
     effects.push({x:W/2, y:H*0.32, r:RADII[6], alpha:1, txt:'🌪 洗牌', color:'#4E7F8A'});
     doShuffle();
   }
-  powerInv[kind]--; powerUsed=true;
-  updatePowerUI(); saveRun(); // 用道具后立即存快照，防止刷新丢失道具状态
+  for(const f of fruits) f.marked=false;
+  powerCast=null;
+  updatePowerUI(); saveRun();
+}
+function cancelPowerCast(refund){ // 收尾：清标记；refund=true 时退还库存与次数（例如预告期间游戏结束）
+  if(powerCast && refund){
+    const k=powerCast.kind;
+    powerInv[k]=Math.min(POWERUP_MAX, powerInv[k]+1);
+    if(powerUseCount>0) powerUseCount--;
+  }
+  for(const f of fruits) f.marked=false;
+  powerCast=null;
+  updatePowerUI();
 }
 function doShuffle(){ // 洗牌 = 顶部重新撒落：清空速度、随机 x、错开负 y，让物理自己重新堆叠
   const sorted=[...fruits].sort((a,b)=>a.r-b.r); // 大的先撒，避免压住小水果
   sorted.forEach((f,i)=>{
     f.x = f.r + Math.random()*(W-2*f.r);
-    f.y = TOP_Y - (i%5)*RADII[8]*0.55 - 26 - Math.random()*18;
-    f.vx = (Math.random()-0.5)*0.6; f.vy=0; f.merged=false;
+    // 2.3 放慢：每批 2 个、逐批下落（原 5 档过快看不清），撒落过程更舒展
+    f.y = TOP_Y - 26 - Math.floor(i/2)*RADII[8]*0.46 - Math.random()*10;
+    f.vx = (Math.random()-0.5)*0.4; f.vy=0; f.merged=false; f.marked=false;
   });
   fruits=sorted;
-  graceFrames=180; // 撒落期间短暂高于危险线，给足下落时间避免误判
+  graceFrames=320; // 撒落期间短暂高于危险线，给足下落时间避免误判
 }
 $pw.pluck.onclick=()=>activatePower('pluck');
 $pw.same.onclick=()=>activatePower('same');
@@ -980,7 +1128,7 @@ $pw.shuffle.onclick=()=>activatePower('shuffle');
 document.getElementById('pwOk').onclick=()=>{
   const k=pendingPower;
   $pwConfirm.classList.remove('show'); pendingPower=null; uiBlocked=false;
-  if(k) castPower(k); else updatePowerUI();
+  if(k) beginPowerCast(k); else updatePowerUI(); // 2.3 确认后不立即生效，进入 3 秒预告
 };
 document.getElementById('pwCancel').onclick=closePowerConfirm;
 $pwConfirm.addEventListener('pointerdown', e=>{ if(e.target===$pwConfirm) closePowerConfirm(); }); // 点遮罩空白处 = 取消
