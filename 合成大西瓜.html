@@ -117,6 +117,18 @@
   .start-guide .hi{color:var(--danger); font-weight:700;}
   .start-card .btn{margin-top:4px; font-size:17px; padding:13px 36px;}
 
+  /* ===== 2.1 开场模式选择（segmented） ===== */
+  .mode-pick{display:flex; gap:6px; background:rgba(127,168,107,.14); border-radius:14px; padding:5px; width:100%; border:1px solid rgba(127,168,107,.4);}
+  .mode-opt{flex:1; border:0; background:transparent; border-radius:10px; padding:9px 0; font:inherit; font-size:14px; font-weight:700; color:var(--sub); cursor:pointer; transition:all .18s ease; white-space:nowrap;}
+  .mode-opt:hover{color:var(--ink);}
+  .mode-opt.active{background:var(--card); color:var(--ink); box-shadow:0 4px 12px rgba(94,138,78,.22); border:1px solid var(--sage);}
+
+  /* ===== 2.1 模式差异：经典模式隐藏道具栏；道具模式裁掉 frame 下沿 25% 治本 ===== */
+  body.mode-classic .power-bar{display:none;}
+  body.mode-power .stage-frame{clip-path:polygon(0 0, 100% 0, 100% 75%, 0 75%);}
+  /* 道具模式兜底：即便裁切有点偏差，道具栏也在 frame 之上且有圆角卡纸背景 */
+  body.mode-power .power-bar{position:relative; z-index:3; background:var(--card); border-radius:18px; padding:8px 10px 10px; box-shadow:0 4px 12px rgba(62,74,54,.10);}
+
   /* ===== 排行榜 ===== */
   .submit-row{display:flex; gap:8px; width:min(260px,80%);}
   .name-input{
@@ -318,14 +330,18 @@
           <div class="start-card">
             <img class="start-flower" src="assets/flower_clematis.svg" alt="铁线莲装饰">
             <h2>合成大西瓜</h2>
-            <div class="start-guide">
+            <div class="mode-pick" id="modePick">
+              <button class="mode-opt active" data-mode="classic">🍉 经典</button>
+              <button class="mode-opt" data-mode="power">✨ 道具</button>
+            </div>
+            <div class="start-guide" id="startGuide">
               • 移动鼠标 / 手指瞄准落点，点击放下水果<br>
               • 相同两个水果相撞，会合成更大的下一阶<br>
               • 合成出橘子 / 桃子 / 菠萝，会获得对应道具<br>
               • 道具：🍃摘除 · 🔮同类消 · 🌪洗牌（合成解锁）<br>
               <span class="hi">• 水果堆过顶部危险线即结束，挑战极限吧！</span>
             </div>
-            <button class="btn" id="startBtn2">开始游戏</button>
+            <button class="btn" id="startBtn2">🍉 开始游戏</button>
           </div>
         </div>
 
@@ -508,6 +524,20 @@ try{ best=parseInt(localStorage.getItem('watermelon_best')||'0',10)||0; }catch(e
 $best.textContent=best;
 
 let lastAimX = null;   // 记住上次瞄准的 X，落子后新水果沿用，避免回中跳变
+
+/* ===== 2.1 游戏模式（开场选择）=====
+ * classic = 经典模式（纯净局）：去掉道具栏、合成时不获得道具；powerUsed 永为 false。
+ * power   = 道具模式（道具挑战）：显示道具栏，合成橘子/桃子/菠萝可解锁三道具。
+ * 排行榜上榜模式决策：经典模式永远 classic；道具模式按 powerUsed 决定（用过→power，否则→classic）。 */
+let gameMode = 'classic';
+const GUIDE_CLASSIC_HTML = '• 移动鼠标 / 手指瞄准落点，点击放下水果<br>'
+  + '• 相同两个水果相撞，会合成更大的下一阶<br>'
+  + '<span class="hi">• 水果堆过顶部危险线即结束，挑战极限吧！</span>';
+const GUIDE_POWER_HTML   = '• 移动鼠标 / 手指瞄准落点，点击放下水果<br>'
+  + '• 相同两个水果相撞，会合成更大的下一阶<br>'
+  + '• 合成出橘子 / 桃子 / 菠萝，会获得对应道具<br>'
+  + '• 道具：🍃摘除 · 🔮同类消 · 🌪洗牌（合成解锁）<br>'
+  + '<span class="hi">• 水果堆过顶部危险线即结束，挑战极限吧！</span>';
 function weightedType(exclude){
   const pool=[0,0,0,0,1,1,1,2,2,3,4];
   if(exclude==null) return pool[Math.floor(Math.random()*pool.length)];
@@ -542,8 +572,12 @@ function gameOver(){
   $overlay.classList.add('show');
   submitted=false; $submitTip.textContent=""; $submitScoreBtn.disabled=false;
   $nameInput.value = localStorage.getItem('watermelon_name')||"";
-  $modeNote.textContent = powerUsed ? "本局使用过道具，将计入「道具挑战榜」" : "本局未使用道具，将计入「全服榜」";
-  if(score>0) lbLocalAdd(($nameInput.value||"").trim()||"本机玩家", score, powerUsed?'power':'classic'); // 自动记入本机纪录榜
+  // 2.1：上榜 mode 由 gameMode+powerUsed 共同决定；经典模式永远经典，道具模式按是否使用道具决定
+  const _submitMode = (gameMode==='power' && powerUsed) ? 'power' : 'classic';
+  $modeNote.textContent = _submitMode==='power'
+    ? "本局使用过道具，将计入「道具挑战榜」"
+    : (gameMode==='classic' ? "经典模式 · 将计入「全服榜」" : "本局未使用道具，将计入「全服榜」");
+  if(score>0) lbLocalAdd(($nameInput.value||"").trim()||"本机玩家", score, _submitMode); // 自动记入本机纪录榜
   if(score>best){ best=score; try{localStorage.setItem('watermelon_best',best);}catch(e){} $best.textContent=best; }
 }
 function dropPending(){
@@ -561,13 +595,14 @@ function dropPending(){
  * 写入：游戏进行中每 ~1.5s 快照一次 + pagehide/切后台时补存（只存 running 且未结束的局）。
  * 恢复：页面加载时检测快照 → 校验合法后还原水果/待落水果/分数，轻提示告知。
  * 释放：gameOver() 或玩家主动重开 startGame() 时删除 —— 本局结束即释放，不会长期残留。 */
-const RUN_KEY='watermelon_run_v1';
+const RUN_KEY='watermelon_run_v2'; // 2.1 升级：含 gameMode（v1 缓存自动失效）
 let saveTick=0;
 function saveRun(){
   if(!running || over) return;
   try{
     localStorage.setItem(RUN_KEY, JSON.stringify({
-      v:2,
+      v:3,
+      gameMode: gameMode, // 2.1：恢复时同步身体模式类与道具栏可见性
       fruits: fruits.map(f=>({x:+f.x.toFixed(1), y:+f.y.toFixed(1),
                               vx:+f.vx.toFixed(2), vy:+f.vy.toFixed(2), r:f.r, type:f.type})),
       pending: pending ? {x:+pending.x.toFixed(1), type:pending.type} : null,
@@ -580,7 +615,7 @@ function clearRun(){ try{ localStorage.removeItem(RUN_KEY); }catch(e){} }
 function tryRestoreRun(){
   let d=null;
   try{ d=JSON.parse(localStorage.getItem(RUN_KEY)||'null'); }catch(e){}
-  if(!d || (d.v!==1 && d.v!==2) || !Array.isArray(d.fruits) || d.fruits.length>80){ clearRun(); return false; }
+  if(!d || (d.v!==2 && d.v!==3) || !Array.isArray(d.fruits) || d.fruits.length>80){ clearRun(); return false; }
   const ok = d.fruits.length===0 || d.fruits.every(f=>
     f && Number.isFinite(f.x) && Number.isFinite(f.y) && Number.isFinite(f.r)
     && Number.isInteger(f.type) && f.type>=0 && f.type<RADII.length);
@@ -606,6 +641,10 @@ function tryRestoreRun(){
   graceFrames = 90; // 恢复时水果可能仍较高，给危险线判定一段宽限
   $score.textContent = score;
   paintFruitTo($nextCv, nextType);
+  // 2.1：恢复 gameMode + body 模式类 + startOverlay 隐藏
+  gameMode = (d.gameMode==='power') ? 'power' : 'classic';
+  document.body.classList.toggle('mode-power', gameMode==='power');
+  document.body.classList.toggle('mode-classic', gameMode!=='power');
   $startOverlay.classList.remove('show');
   running=true; over=false; overTimer=0; lastDropTime=-9999; submitted=false;
   $pauseBtn.disabled=false; // 恢复的这局同样允许暂停
@@ -669,16 +708,17 @@ function step(){
           fruits.push({x:mx, y:my, r:RADII[nt], type:nt, vx:(a.vx+b.vx)/4, vy:(a.vy+b.vy)/4, merged:false});
           const sc = SCORES[nt];
           score += sc; $score.textContent = score;
-          effects.push({x:mx, y:my, r:RADII[nt]*0.55, alpha:1, txt:"+"+sc, color:"#C97A63"});
+          // 2.1 去掉合成"+分"飘字——仅保留道具获得飘字，让画面更统一
+          // 2.1：仅道具模式下合成才会解锁道具；经典模式走纯净合成逻辑（powerInv 永为 0、powerUsed 永为 false）
           const unlock = POWERUP_UNLOCK[nt];
-          if(unlock && powerInv[unlock] < POWERUP_MAX){
+          if(gameMode==='power' && unlock && powerInv[unlock] < POWERUP_MAX){
             powerInv[unlock]++;
             effects.push({x:mx, y:my+RADII[nt]*0.9, r:RADII[nt]*0.5, alpha:1, txt:POWERUP_DEFS[unlock].icon+' '+POWERUP_DEFS[unlock].label, color:"#5E8A4E"});
             updatePowerUI();
           }
         }else{
           score += 100; $score.textContent = score;
-          effects.push({x:mx, y:my, r:RADII[9]*0.7, alpha:1, txt:"+100", color:"#7FA86B"});
+          // 2.1 去掉终极"+100"飘字，与合成"+分"一起统一去掉
         }
       }
       fruits = fruits.filter(f=>!f.merged);
@@ -787,6 +827,25 @@ window.addEventListener('keydown', e=>{
 
 document.getElementById('startBtn').onclick    = ()=>{ if(!running) startGame(); };
 document.getElementById('startBtn2').onclick   = ()=>{ if(!running) startGame(); };
+
+/* ===== 2.1 开场模式选择 ===== */
+const $modePick = document.getElementById('modePick');
+const $startGuide = document.getElementById('startGuide');
+const $startBtn2 = document.getElementById('startBtn2');
+function setMode(m){
+  gameMode = m;
+  $modePick.querySelectorAll('.mode-opt').forEach(b => b.classList.toggle('active', b.dataset.mode===m));
+  $startGuide.innerHTML = (m==='power') ? GUIDE_POWER_HTML : GUIDE_CLASSIC_HTML;
+  $startBtn2.textContent = (m==='power') ? '✨ 开始挑战' : '🍉 开始游戏';
+  document.body.classList.toggle('mode-power', m==='power');
+  document.body.classList.toggle('mode-classic', m!=='power');
+}
+$modePick.addEventListener('click', e=>{
+  const btn = e.target.closest('.mode-opt');
+  if(!btn) return;
+  setMode(btn.dataset.mode);
+});
+setMode('classic'); // 初始默认经典模式（CSS 同时隐藏道具栏）
 document.getElementById('restartBtn').onclick  = startGame;
 document.getElementById('restartTop').onclick= startGame;
 
@@ -1037,13 +1096,16 @@ async function renderLb(){
   }
 }
 async function openLb(){
+  // 2.1：排行榜默认 tab 跟 gameMode 走——经典=全服榜、道具=道具挑战榜；用户可在弹窗内自由切换
+  setLbTab(gameMode==='power' ? 'power' : 'classic');
   $lbOverlay.classList.add('show');
   renderLb();
 }
 async function onSubmitScore(){
   if(submitted||!over) return;
   const name=($nameInput.value||"").trim().slice(0,12)||"神秘玩家";
-  const mode = powerUsed ? 'power' : 'classic';
+  // 2.1：上榜 mode 决策 = 经典永远 classic；道具模式按 powerUsed 决定（与 gameOver 保持一致）
+  const mode = (gameMode==='power' && powerUsed) ? 'power' : 'classic';
   try{ localStorage.setItem('watermelon_name',name); }catch(e){}
   if(!lbReady()){ $submitTip.textContent="排行榜服务尚未配置，暂无法上传"; return; }
   submitted=true; $submitScoreBtn.disabled=true; $submitTip.textContent="上传中…";
