@@ -123,11 +123,40 @@
   .mode-opt:hover{color:var(--ink);}
   .mode-opt.active{background:var(--card); color:var(--ink); box-shadow:0 4px 12px rgba(94,138,78,.22); border:1px solid var(--sage);}
 
-  /* ===== 2.1 模式差异：经典模式隐藏道具栏；道具模式裁掉 frame 下沿 25% 治本 ===== */
+  /* ===== 2.2 模式差异：经典模式隐藏道具栏；道具模式 frame 底部「柔和镂空」（替代硬裁切） ===== */
   body.mode-classic .power-bar{display:none;}
-  body.mode-power .stage-frame{clip-path:polygon(0 0, 100% 0, 100% 75%, 0 75%);}
-  /* 道具模式兜底：即便裁切有点偏差，道具栏也在 frame 之上且有圆角卡纸背景 */
+  /* 底部中间用径向渐变柔和挖空：中间藤蔓渐隐淡出给道具栏让位，两侧藤蔓保留并向下包裹，无生硬直线切口 */
+  body.mode-power .stage-frame{
+    -webkit-mask-image:radial-gradient(ellipse 56% 19% at 50% 91%, transparent 44%, #000 100%);
+            mask-image:radial-gradient(ellipse 56% 19% at 50% 91%, transparent 44%, #000 100%);
+  }
+  /* 道具模式兜底：道具栏在 frame 之上且有圆角卡纸背景，让镂空区干净不显脏 */
   body.mode-power .power-bar{position:relative; z-index:3; background:var(--card); border-radius:18px; padding:8px 10px 10px; box-shadow:0 4px 12px rgba(62,74,54,.10);}
+
+  /* ===== 2.2 道具使用确认弹窗（说明随机效果） ===== */
+  .pw-overlay{
+    position:absolute; inset:18px; border-radius:20px; z-index:15;
+    display:none; flex-direction:column; align-items:center; justify-content:center; padding:24px;
+    background:rgba(62,74,54,.52); backdrop-filter:blur(3px);
+  }
+  .pw-overlay.show{display:flex;}
+  .pw-card{
+    width:min(330px, 90%); background:var(--card);
+    border:1.5px solid var(--sage); border-radius:24px; padding:24px 24px 20px;
+    box-shadow:0 18px 44px rgba(62,74,54,.28);
+    display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;
+  }
+  .pw-c-icon{
+    width:62px; height:62px; border-radius:50%;
+    background:rgba(127,168,107,.16); border:1.5px solid var(--sage);
+    display:flex; align-items:center; justify-content:center; font-size:30px; line-height:1;
+  }
+  .pw-c-name{font-size:20px; font-weight:800; letter-spacing:1px; color:var(--ink);}
+  .pw-c-desc{font-size:13px; color:var(--body); line-height:1.85; background:rgba(127,168,107,.10); border-radius:14px; padding:11px 14px;}
+  .pw-c-desc .rand{color:var(--danger); font-weight:700;}
+  .pw-c-btns{display:flex; gap:10px; width:100%; margin-top:4px;}
+  .pw-c-btns .btn{flex:1; padding:11px 0; font-size:15px;}
+  .pw-c-stock{font-size:12px; color:var(--sub);}
 
   /* ===== 排行榜 ===== */
   .submit-row{display:flex; gap:8px; width:min(260px,80%);}
@@ -303,13 +332,13 @@
       <div class="stage-wrap">
         <canvas id="game" width="440" height="600"></canvas>
         <div class="power-bar" id="powerBar">
-          <button class="power-slot" id="pwPluck" disabled title="摘除：点掉一个水果">
+          <button class="power-slot" id="pwPluck" disabled title="摘除：随机移除场上一个水果（可能是任何一个）">
             <span class="pw-icon">🍃</span><span class="pw-nm">摘除</span><span class="pw-cnt">0</span>
           </button>
-          <button class="power-slot" id="pwSame" disabled title="同类消：消除同类型所有水果">
+          <button class="power-slot" id="pwSame" disabled title="同类消：随机锁定场上某一类水果，整类全部消除">
             <span class="pw-icon">🔮</span><span class="pw-nm">同类消</span><span class="pw-cnt">0</span>
           </button>
-          <button class="power-slot" id="pwShuffle" disabled title="洗牌：所有水果重新撒落">
+          <button class="power-slot" id="pwShuffle" disabled title="洗牌：场上所有水果随机重新撒落">
             <span class="pw-icon">🌪</span><span class="pw-nm">洗牌</span><span class="pw-cnt">0</span>
           </button>
         </div>
@@ -342,6 +371,19 @@
               <span class="hi">• 水果堆过顶部危险线即结束，挑战极限吧！</span>
             </div>
             <button class="btn" id="startBtn2">🍉 开始游戏</button>
+          </div>
+        </div>
+
+        <div class="pw-overlay" id="pwConfirm">
+          <div class="pw-card">
+            <div class="pw-c-icon" id="pwCIcon">🍃</div>
+            <div class="pw-c-name" id="pwCName">摘除</div>
+            <div class="pw-c-desc" id="pwCDesc"></div>
+            <div class="pw-c-stock" id="pwCStock"></div>
+            <div class="pw-c-btns">
+              <button class="btn ghost" id="pwCancel">再想想</button>
+              <button class="btn" id="pwOk">确认使用</button>
+            </div>
           </div>
         </div>
 
@@ -501,16 +543,19 @@ const DROP_CD = 380; // 两次投放最小间隔(ms)，避免连点连发
  * 合成出指定水果时获得对应道具（见 POWERUP_UNLOCK），库存上限 POWERUP_MAX，本局内有效、结束清零。
  * powerUsed 标记本局是否用过道具 → 决定成绩进「全服榜(纯净)」还是「道具挑战榜」。 */
 const POWERUP_DEFS = {
-  pluck:  {label:'摘除',   icon:'🍃', desc:'点掉一个水果'},
-  same:   {label:'同类消', icon:'🔮', desc:'消除同类型所有水果'},
-  shuffle:{label:'洗牌',   icon:'🌪', desc:'所有水果重新撒落'},
+  pluck:  {label:'摘除',   icon:'🍃', desc:'随机移除场上 1 个水果',
+           descHtml:'随机移除场上<span class="rand"> 1 个水果</span><br>场上每个水果机会均等，大果也可能被摘走'},
+  same:   {label:'同类消', icon:'🔮', desc:'随机锁定一类，全部消除',
+           descHtml:'随机锁定场上<span class="rand">某一类水果</span>，该类型的全部个体一起消除<br>锁定哪一类完全随机，无法指定'},
+  shuffle:{label:'洗牌',   icon:'🌪', desc:'所有水果重新随机撒落',
+           descHtml:'场上所有水果<span class="rand">随机重新撒落</span><br>位置全部打乱重排，可能解围也可能更挤'},
 };
 const POWERUP_UNLOCK = {3:'pluck', 6:'same', 7:'shuffle'}; // 合成出 橘子/桃子/菠萝 时获得
 const POWERUP_MAX = 2;
 let powerInv = {pluck:0, same:0, shuffle:0};
 let powerUsed = false;  // 本局是否使用过任意道具
-let aimMode = null;     // null | 'pluck' | 'same'，瞄准态
-let aimHover = null;    // 瞄准态下悬停/命中的水果索引
+let uiBlocked = false;   // 2.2 道具确认弹窗打开期间冻结物理，避免弹窗时水果继续运动 / 误判危险线
+let pendingPower = null; // 2.2 待确认使用的道具 kind（'pluck' | 'same' | 'shuffle'）
 let graceFrames = 0;    // 危险线宽限帧：洗牌/恢复时水果短暂高于危险线，避免误判游戏结束
 
 setupCanvas();
@@ -537,6 +582,7 @@ const GUIDE_POWER_HTML   = '• 移动鼠标 / 手指瞄准落点，点击放下
   + '• 相同两个水果相撞，会合成更大的下一阶<br>'
   + '• 合成出橘子 / 桃子 / 菠萝，会获得对应道具<br>'
   + '• 道具：🍃摘除 · 🔮同类消 · 🌪洗牌（合成解锁）<br>'
+  + '• <span class="hi">道具效果随机，无法指定目标</span>，使用前会二次确认<br>'
   + '<span class="hi">• 水果堆过顶部危险线即结束，挑战极限吧！</span>';
 function weightedType(exclude){
   const pool=[0,0,0,0,1,1,1,2,2,3,4];
@@ -636,7 +682,7 @@ function tryRestoreRun(){
        same:Math.max(0,Math.min(POWERUP_MAX,d.powerInv.same)),
        shuffle:Math.max(0,Math.min(POWERUP_MAX,d.powerInv.shuffle))}
     : {pluck:0, same:0, shuffle:0};
-  powerUsed = !!d.powerUsed; aimMode=null; aimHover=null;
+  powerUsed = !!d.powerUsed; uiBlocked=false; pendingPower=null;
   updatePowerUI();
   graceFrames = 90; // 恢复时水果可能仍较高，给危险线判定一段宽限
   $score.textContent = score;
@@ -652,7 +698,7 @@ function tryRestoreRun(){
 }
 
 function step(){
-  if(!running || paused) return; // 暂停中冻结物理
+  if(!running || paused || uiBlocked) return; // 暂停 / 道具确认弹窗打开期间冻结物理
   for(let s=0;s<SUBSTEPS;s++){
     for(const f of fruits){
       f.vy += G/SUBSTEPS;
@@ -768,18 +814,7 @@ function draw(){
     ctx.restore();
   }
 
-  // 瞄准态：悬停水果描边高亮；同类消时同类型一起亮
-  if(aimMode && aimHover!=null){
-    const f=fruits[aimHover]; if(f){
-      const targets = aimMode==='same' ? fruits.filter(x=>x.type===f.type) : [f];
-      ctx.save();
-      for(const t of targets){
-        ctx.strokeStyle="rgba(231,161,124,.95)"; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.arc(t.x, t.y, t.r+4, 0, Math.PI*2); ctx.stroke();
-      }
-      ctx.restore();
-    }
-  }
+  // 2.2 道具改为「随机生效」，已移除瞄准态描边高亮
 
   for(const e of effects){
     ctx.save(); ctx.globalAlpha = Math.max(0, e.alpha);
@@ -797,29 +832,17 @@ function pointerX(e){
   const cx = (clientX - r.left) * (W / r.width);   // 显示像素 → 逻辑坐标 W
   return Math.max(RADII[0], Math.min(W-RADII[0], cx));
 }
-function pointerPos(e){ // 完整指针坐标（含 Y，供瞄准态命中判断）
-  const r = cv.getBoundingClientRect();
-  const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-  const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
-  return {x:(clientX-r.left)*(W/r.width), y:(clientY-r.top)*(H/r.height)};
-}
-function fruitAt(x,y){ // 命中的水果索引（取最上层 = 最后命中）
-  let hit=null;
-  for(let i=0;i<fruits.length;i++){ if(Math.hypot(fruits[i].x-x, fruits[i].y-y) <= fruits[i].r) hit=i; }
-  return hit;
-}
+// 2.2 瞄准态取消（道具改为随机生效），pointerPos / fruitAt 命中检测一并移除
 cv.addEventListener('pointermove', e=>{
-  if(aimMode && !paused){ const p=pointerPos(e); aimHover = fruitAt(p.x,p.y); return; }
-  if(pending && !over && !paused){ pending.x = pointerX(e); lastAimX = pending.x; }
+  if(pending && !over && !paused && !uiBlocked){ pending.x = pointerX(e); lastAimX = pending.x; }
 });
 cv.addEventListener('pointerdown', e=>{
-  // 瞄准态：命中水果则施放，点空白取消；绝不掉落新水果
-  if(aimMode && !paused){ const p=pointerPos(e); resolvePowerAim(fruitAt(p.x,p.y)); return; }
+  if(uiBlocked) return; // 2.2 道具确认弹窗打开期间锁定落子输入
   // 落点即为"点击/落指处"：先用指针当前位置更新瞄准位，再落子，避免回中需二次移动
   if(running && !over && !paused && pending){ lastAimX = pending.x = pointerX(e); dropPending(); }
 });
 window.addEventListener('keydown', e=>{
-  if(!pending || over || paused) return;
+  if(!pending || over || paused || uiBlocked) return;
   if(e.key==='ArrowLeft')  pending.x = Math.max(RADII[pending.type], pending.x-12);
   if(e.key==='ArrowRight') pending.x = Math.min(W-RADII[pending.type], pending.x+12);
   if(e.key===' ' || e.key==='Enter'){ if(running && !over) dropPending(); }
@@ -856,7 +879,7 @@ document.getElementById('restartTop').onclick= startGame;
 const $pauseBtn=document.getElementById('pauseBtn'), $pauseOverlay=document.getElementById('pauseOverlay');
 $pauseBtn.disabled=true; // 初始（未开始）不可暂停
 function pauseGame(){
-  if(!running || over || paused) return;
+  if(!running || over || paused || uiBlocked) return; // 道具确认弹窗打开期间不允许再暂停，避免遮罩叠加
   paused=true;
   saveRun(); // 暂停即快照，此刻刷新也能恢复
   $pauseOverlay.classList.add('show');
@@ -883,35 +906,63 @@ const $pw = {
 function updatePowerUI(){
   for(const k in $pw){
     const slot=$pw[k], cnt=powerInv[k];
-    slot.querySelector('.pw-cnt').textContent = cnt;
+    if(slot._cnt!==cnt){ slot.querySelector('.pw-cnt').textContent = cnt; slot._cnt=cnt; } // 脏检查，避免每帧写 DOM
     slot.classList.toggle('empty', cnt<=0);
-    slot.classList.toggle('aim', aimMode===k);
-    // 可点 = 游戏中且库存>0；瞄准态下当前道具始终可点（用于取消）
-    slot.disabled = !(running && !over && !paused && cnt>0) && aimMode!==k;
+    // 可点 = 游戏中 + 有库存 + 场上有水果（空场用任何道具都无意义）+ 确认弹窗未打开
+    slot.disabled = !(running && !over && !paused && !uiBlocked && cnt>0 && fruits.length>0);
   }
 }
 function resetPowerState(){
-  powerInv={pluck:0,same:0,shuffle:0}; powerUsed=false; aimMode=null; aimHover=null;
+  powerInv={pluck:0,same:0,shuffle:0}; powerUsed=false; uiBlocked=false; pendingPower=null;
+  const c=document.getElementById('pwConfirm'); if(c) c.classList.remove('show'); // 新开一局时收起确认弹窗
   updatePowerUI();
 }
-function activatePower(kind){
-  if(!running || over || paused) return;
+
+/* ===== 2.2 道具确认弹窗：使用前说明随机效果，避免误触 ===== */
+const $pwConfirm=document.getElementById('pwConfirm');
+const $pwCIcon=document.getElementById('pwCIcon'), $pwCName=document.getElementById('pwCName'),
+      $pwCDesc=document.getElementById('pwCDesc'), $pwCStock=document.getElementById('pwCStock');
+function openPowerConfirm(kind){
+  const d=POWERUP_DEFS[kind]; if(!d) return;
+  pendingPower=kind; uiBlocked=true;
+  $pwCIcon.textContent=d.icon;
+  $pwCName.textContent=d.label;
+  $pwCDesc.innerHTML=d.descHtml;
+  $pwCStock.textContent='库存 '+powerInv[kind]+' 个 · 使用后本局计入「道具挑战榜」';
+  $pwConfirm.classList.add('show');
+  updatePowerUI();
+}
+function closePowerConfirm(){
+  $pwConfirm.classList.remove('show');
+  pendingPower=null; uiBlocked=false;
+  updatePowerUI();
+}
+function activatePower(kind){ // 点道具槽 → 先弹确认窗，确认后才真正生效
+  if(!running || over || paused || uiBlocked) return;
   if(powerInv[kind]<=0) return;
-  if(kind==='shuffle'){ // 洗牌：全场效果，立即施放
-    aimMode=null; aimHover=null;
-    powerInv.shuffle--; powerUsed=true; doShuffle(); updatePowerUI(); return;
-  }
-  aimMode = (aimMode===kind) ? null : kind; // 再点一次取消瞄准
-  aimHover=null;
-  updatePowerUI();
+  if(fruits.length===0) return; // 空场无任何可作用对象
+  openPowerConfirm(kind);
 }
-function resolvePowerAim(idx){
-  if(idx==null){ aimMode=null; aimHover=null; updatePowerUI(); return; } // 点空白 → 取消
-  const f=fruits[idx];
-  if(aimMode==='pluck'){ fruits.splice(idx,1); powerInv.pluck--; }
-  else if(aimMode==='same'){ const t=f.type; fruits=fruits.filter(x=>x.type!==t); powerInv.same--; }
-  powerUsed=true;
-  aimMode=null; aimHover=null; updatePowerUI();
+function castPower(kind){ // 确认后：效果随机生效，不指定目标
+  if(!running || over) return;
+  if(powerInv[kind]<=0 || fruits.length===0) return;
+  if(kind==='pluck'){
+    const i=Math.floor(Math.random()*fruits.length), f=fruits[i]; // 完全随机：每个水果机会均等
+    effects.push({x:f.x, y:f.y, r:f.r*0.85, alpha:1, txt:'🍃 摘除', color:'#5E8A4E'});
+    fruits.splice(i,1);
+  }else if(kind==='same'){
+    const types=[...new Set(fruits.map(f=>f.type))];            // 场上现存类型，等概率随机抽一类
+    const t=types[Math.floor(Math.random()*types.length)];
+    const gone=fruits.filter(f=>f.type===t);
+    const cx=gone.reduce((s,f)=>s+f.x,0)/gone.length, cy=gone.reduce((s,f)=>s+f.y,0)/gone.length;
+    effects.push({x:cx, y:cy, r:RADII[t]*1.1, alpha:1, txt:'🔮 同类消 ×'+gone.length, color:'#7A5C8E'});
+    fruits=fruits.filter(f=>f.type!==t);
+  }else if(kind==='shuffle'){
+    effects.push({x:W/2, y:H*0.32, r:RADII[6], alpha:1, txt:'🌪 洗牌', color:'#4E7F8A'});
+    doShuffle();
+  }
+  powerInv[kind]--; powerUsed=true;
+  updatePowerUI(); saveRun(); // 用道具后立即存快照，防止刷新丢失道具状态
 }
 function doShuffle(){ // 洗牌 = 顶部重新撒落：清空速度、随机 x、错开负 y，让物理自己重新堆叠
   const sorted=[...fruits].sort((a,b)=>a.r-b.r); // 大的先撒，避免压住小水果
@@ -926,6 +977,14 @@ function doShuffle(){ // 洗牌 = 顶部重新撒落：清空速度、随机 x�
 $pw.pluck.onclick=()=>activatePower('pluck');
 $pw.same.onclick=()=>activatePower('same');
 $pw.shuffle.onclick=()=>activatePower('shuffle');
+document.getElementById('pwOk').onclick=()=>{
+  const k=pendingPower;
+  $pwConfirm.classList.remove('show'); pendingPower=null; uiBlocked=false;
+  if(k) castPower(k); else updatePowerUI();
+};
+document.getElementById('pwCancel').onclick=closePowerConfirm;
+$pwConfirm.addEventListener('pointerdown', e=>{ if(e.target===$pwConfirm) closePowerConfirm(); }); // 点遮罩空白处 = 取消
+window.addEventListener('keydown', e=>{ if(uiBlocked && e.key==='Escape') closePowerConfirm(); });
 updatePowerUI();
 
 /* ===== 云端排行榜（Supabase / PostgREST 兼容 REST）=====
@@ -1143,7 +1202,13 @@ NAMES.forEach((nm,i)=>{
   if(i<NAMES.length-1){ const a=document.createElement('div'); a.className='arrow'; a.textContent='→'; chain.appendChild(a); }
 });
 
-function loop(){ step(); draw(); requestAnimationFrame(loop); }
+let uiTick=0;
+function loop(){
+  step(); draw();
+  // 2.2 道具槽可用态还依赖「场上是否有水果」，节流刷新（每 10 帧）覆盖所有增删水果的场景
+  if((++uiTick % 10)===0) updatePowerUI();
+  requestAnimationFrame(loop);
+}
 
 /* 启动时尝试恢复上次未完成的一局；刷新/关闭/切后台前补存一次快照 */
 if(tryRestoreRun()){
