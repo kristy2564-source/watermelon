@@ -95,17 +95,24 @@
   /* ===== 穆夏风 · 初始引导弹窗 ===== */
   .start-overlay{
     position:absolute; inset:18px; border-radius:20px; z-index:13;
-    display:none; flex-direction:column; align-items:center; justify-content:center;
-    padding:28px;
+    display:none; flex-direction:column; align-items:center; justify-content:flex-start;
+    padding:14px 14px 18px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    /* 自定义滚动条：穆夏绿细圆，融入装饰框 */
+    scrollbar-width:thin; scrollbar-color:rgba(127,168,107,.55) transparent;
     background:linear-gradient(160deg, rgba(246,248,239,.93), rgba(231,240,221,.93));
     backdrop-filter:blur(2px);
   }
   .start-overlay.show{display:flex;}
+  .start-overlay::-webkit-scrollbar{width:6px;}
+  .start-overlay::-webkit-scrollbar-track{background:transparent;}
+  .start-overlay::-webkit-scrollbar-thumb{background:rgba(127,168,107,.55); border-radius:3px;}
+  .start-overlay::-webkit-scrollbar-thumb:hover{background:rgba(94,138,78,.7);}
   .start-card{
-    width:min(360px, 88%); background:var(--card);
-    border:1.5px solid var(--sage); border-radius:24px; padding:30px 30px 26px;
+    width:min(360px, 96%); margin:auto 0; /* 内容不足时垂直居中，超出时贴顶部可滚到底 */
+    background:var(--card);
+    border:1.5px solid var(--sage); border-radius:22px; padding:24px 26px 22px;
     box-shadow:0 16px 40px rgba(62,74,54,.18);
-    display:flex; flex-direction:column;  align-items:center; gap:14px; position:relative;
+    display:flex; flex-direction:column;  align-items:center; gap:12px; position:relative;
   }
   .start-flower{ width:86px; height:auto; margin-bottom:2px; }
   .start-card h2{font-size:28px; font-weight:700; letter-spacing:2px; color:var(--ink);}
@@ -295,6 +302,13 @@
     .unit{width:54px;}
     .unit canvas{width:38px; height:38px;}
     .unit .nm{font-size:10px;}
+    /* 2.6 窄屏开场页：缩字号、紧 padding，确保长引导文案可在卡片内完整滚动 */
+    .start-overlay{inset:10px; border-radius:16px; padding:10px 8px 14px;}
+    .start-card{padding:18px 20px 16px; border-radius:20px; gap:10px;}
+    .start-flower{width:64px;}
+    .start-card h2{font-size:24px; letter-spacing:1.5px;}
+    .start-guide{font-size:12.5px; line-height:1.85; padding:10px 14px; border-radius:12px;}
+    .start-card .btn{margin-top:2px; padding:11px 30px; font-size:15px;}
   }
   @media (max-width:380px){
     .brand .emoji{font-size:20px;}
