@@ -227,6 +227,18 @@
   .lb-name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .lb-score{font-weight:700; color:var(--ink);}
   .lb-empty{font-size:13px; color:var(--sub); text-align:center; padding:26px 8px; line-height:1.8;}
+  /* 2.8 待上传队列提示条：本机成绩上传失败后在这里手动补传 */
+  .lb-pending{display:none; align-items:center; justify-content:space-between; gap:10px;
+    background:rgba(214,166,66,.13); border:1px solid rgba(201,150,46,.34); border-radius:12px;
+    padding:8px 12px; font-size:12px; color:#8C6420; flex:0 0 auto;}
+  .lb-pending.show{display:flex;}
+  .lb-pend-txt{flex:1; line-height:1.45;}
+  .lb-pend-btn{
+    flex:0 0 auto; background:rgba(201,150,46,.92); color:#fff; border:none; border-radius:9px;
+    padding:5px 13px; font-size:12px; letter-spacing:.04em; cursor:pointer; font-family:inherit;
+  }
+  .lb-pend-btn:hover{background:rgba(176,126,28,1);}
+  .lb-pend-btn:disabled{opacity:.6; cursor:default;}
 
   /* ===== 本局恢复提示（2.3：画布下方独立槽位，不压边框/画布，高度预留无跳动） ===== */
   .stage-col{display:flex; flex-direction:column; align-items:center;}
@@ -428,6 +440,7 @@
               <button class="lb-tab active" id="lbTabClassic" data-page-node-id="A2cTVPmAXX6yAgCTBHxprv">全服榜</button>
               <button class="lb-tab" id="lbTabPower" data-page-node-id="znVbB0AtCuA2dZhe9SUpLg">道具挑战榜</button>
             </div>
+            <div class="lb-pending" id="lbPending"></div>
             <div class="lb-list" id="lbList" data-page-node-id="s92t4khw4SapU7CJUdXddI"><div class="lb-empty" data-page-node-id="AdYFbUKGNXVB7JCd26hf70">加载中…</div></div>
             <button class="btn ghost" id="lbClose" data-page-node-id="4LYcdeCDOn5SOs4aCCbWwB">关闭</button>
           </div>
@@ -1232,7 +1245,8 @@ const LB_KEY  = "sb_publishable_ILvqXrO7r1Fr-4A5JtR-dA_mxGD-T73";  // Publishabl
 
 const $lbOverlay=document.getElementById('lbOverlay'), $lbList=document.getElementById('lbList'),
       $nameInput=document.getElementById('nameInput'), $submitTip=document.getElementById('submitTip'),
-      $submitScoreBtn=document.getElementById('submitScoreBtn'), $lbTitle=document.getElementById('lbTitle');
+      $submitScoreBtn=document.getElementById('submitScoreBtn'), $lbTitle=document.getElementById('lbTitle'),
+      $lbPending=document.getElementById('lbPending');
 const $lbTabClassic=document.getElementById('lbTabClassic'), $lbTabPower=document.getElementById('lbTabPower');
 let submitted=false;
 let lbMode='classic'; // 当前查看的榜：classic=全服榜(纯净) / power=道具挑战榜
@@ -1261,6 +1275,19 @@ const lbLocalAdd=(name,score,m='classic')=>{
 };
 const lbLastGet=()=>{ try{ return JSON.parse(localStorage.getItem('watermelon_last_lb')||'null'); }catch(e){ return null; } };
 const lbLastSet=item=>{ try{ localStorage.setItem('watermelon_last_lb',JSON.stringify(item)); }catch(e){} };
+/* 2.8 待上传队列：云端上传失败的本地成绩暂存于此，可在榜单页手动/自动重传。
+ * 按 name+mode 去重（同名同榜只保留最高分），成功后整条移除。 */
+const PENDING_KEY='watermelon_pending_lb';
+const pendingGet=()=>{ try{ return JSON.parse(localStorage.getItem(PENDING_KEY)||'[]'); }catch(e){ return []; } };
+const pendingSet=a=>{ try{ localStorage.setItem(PENDING_KEY, JSON.stringify(a)); }catch(e){} };
+const pendingAdd=(name,score,mode)=>{
+  const q=pendingGet(), k=name+'|'+mode;
+  const it=q.find(x=>x.name+'|'+x.mode===k);
+  if(it){ it.score=Math.max(it.score, score); it.ts=Date.now(); }
+  else q.push({name, score, mode, ts:Date.now()});
+  pendingSet(q);
+};
+const pendingCount=()=>pendingGet().length;
 const CROWN_FILL={1:'url(#crownGold)',2:'url(#crownSilver)',3:'url(#crownBronze)'};
 const crownSvg=rank=>
   '<svg class="lb-crown" viewBox="0 0 24 20" aria-hidden="true">'+
@@ -1336,6 +1363,42 @@ function setLbTab(mode){
   $lbTabPower.classList.toggle('active', mode==='power');
   $lbTitle.textContent = LB_TITLE[mode];
 }
+/* 2.8 重传：把待上传队列逐条提交到云端，成功的从队列移除。返回 {ok, fail} */
+async function flushPending(){
+  if(!lbReady()) return {ok:0, fail:pendingCount()};
+  const q=pendingGet();
+  if(!q.length) return {ok:0, fail:0};
+  let ok=0, fail=0;
+  const okKeys=new Set();
+  for(const it of q){
+    try{
+      await lbSubmit(it.name, it.score, it.mode);
+      ok++; okKeys.add(it.name+'|'+it.mode);
+    }catch(e){ fail++; }
+  }
+  if(ok) pendingSet(q.filter(x=>!okKeys.has(x.name+'|'+x.mode)));
+  return {ok, fail};
+}
+function renderPending(){
+  const n=pendingCount();
+  if(!n){ $lbPending.classList.remove('show'); $lbPending.innerHTML=''; return; }
+  $lbPending.classList.add('show');
+  $lbPending.innerHTML='<span class="lb-pend-txt">⚠ 有 '+n+' 条本机成绩尚未上传云端</span>'+
+    '<button class="lb-pend-btn" id="lbRetryBtn">重新上传</button>';
+  document.getElementById('lbRetryBtn').onclick=onRetryPending;
+}
+async function onRetryPending(){
+  $lbPending.innerHTML='<span class="lb-pend-txt">正在重试上传…</span>';
+  const r=await flushPending();
+  if(r.fail===0){
+    $lbPending.innerHTML='<span class="lb-pend-txt">✅ 全部上传成功</span>';
+    renderLb(); // 云端榜刷新，新成绩立即可见
+    setTimeout(renderPending, 1600); // 队列已空，稍后自动收起提示条
+  }else{
+    renderPending();
+    if(r.ok>0){ renderLb(); const t=$lbPending.querySelector('.lb-pend-txt'); if(t) t.textContent='⚠ '+r.ok+' 条已上传，'+r.fail+' 条仍失败，可稍后再试'; }
+  }
+}
 async function renderLb(){
   const mode=lbMode;
   setLbTab(mode);
@@ -1370,6 +1433,11 @@ async function openLb(){
   setLbTab(gameMode==='power' ? 'power' : 'classic');
   $lbOverlay.classList.add('show');
   renderLb();
+  renderPending();
+  // 2.8：打开榜单时若有未上传成绩且云端可用，自动静默补传一次；失败仍留给手动按钮
+  if(lbReady() && pendingCount()>0){
+    flushPending().then(r=>{ if(r.ok>0) renderLb(); renderPending(); });
+  }
 }
 async function onSubmitScore(){
   if(submitted||!over) return;
@@ -1388,9 +1456,10 @@ async function onSubmitScore(){
     lbMode=mode; openLb();
   }catch(e){
     const localScore=lbLocalAdd(name,score,mode); // 云端不可达 → 记入本机纪录
+    pendingAdd(name, score, mode);                // 2.8 同时加入待上传队列，供后续补传
     lbLastSet({name:name,score:localScore,mode:mode,source:'local'});
     submitted=false; $submitScoreBtn.disabled=false;
-    $submitTip.textContent="云端暂不可达（"+lbErr(e)+"），已记入本机榜单";
+    $submitTip.textContent="云端暂不可达（"+lbErr(e)+"），已记入本机榜单，可打开排行榜补传";
   }
 }
 $lbTabClassic.onclick=()=>{ setLbTab('classic'); renderLb(); };
