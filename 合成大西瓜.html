@@ -519,6 +519,16 @@ const FRUIT_VB = [
 ];
 const FRUIT_IMG = [];
 
+/* ===== 1.1 双半径：碰撞半径 + 摆放半径 =====
+ * RADII 保持原样，依旧管两件事 —— 图片尺寸（宽 2r×s）与「同种合成」的判定圈。
+ * 「摆放半径」PRADII = RADII × PLACE_K 只决定水果之间的静置距离：两颗水果能贴得更近，
+ * 逐对视觉缝隙由 +1.8…+17.3px 收敛到 −3.9…+5.5px，不再出现"物理已碰住、画面还留缝"。
+ * 地板与左右墙仍按碰撞半径约束，避免图片陷进地面或被画布边缘切掉。
+ * PLACE_K 由「水果碰撞测试台.html」按逐对贴合偏差最小二乘拟合得出
+ * （k = 1 − Σ偏差 / Σ(rᵢ+rⱼ)，对全部 10×10 配对求和）；换水果素材后要回测试台重新拟合。 */
+const PLACE_K = 0.89;
+const PRADII = RADII.map(r => r * PLACE_K);
+
 function loadFruitIcons(){
   return Promise.all(FRUIT_SVG.map((svg, i) => new Promise(res => {
     const blob = new Blob([svg], {type:'image/svg+xml'});
@@ -707,7 +717,7 @@ function dropPending(){
   if(now - lastDropTime < DROP_CD) return; // 冷却中，忽略这次投放，避免连点连发
   lastDropTime = now;
   const t = pending.type;
-  fruits.push({x:pending.x, y:TOP_Y, r:RADII[t], type:t, vx:(Math.random()-0.5)*0.5, vy:1.5, merged:false});
+  fruits.push({x:pending.x, y:TOP_Y, r:RADII[t], pr:PRADII[t], type:t, vx:(Math.random()-0.5)*0.5, vy:1.5, merged:false});
   spawnPending();
 }
 
@@ -742,8 +752,9 @@ function tryRestoreRun(){
     f && Number.isFinite(f.x) && Number.isFinite(f.y) && Number.isFinite(f.r)
     && Number.isInteger(f.type) && f.type>=0 && f.type<RADII.length);
   if(!ok){ clearRun(); return false; } // 数据损坏 → 丢弃缓存，按新局处理
+  // 摆放半径由 type 反推（旧快照里没有 pr 字段，按当前 PLACE_K 补齐即可）
   fruits = d.fruits.map(f=>({x:f.x, y:f.y, vx:Number(f.vx)||0, vy:Number(f.vy)||0,
-                             r:f.r, type:f.type, merged:false}));
+                             r:f.r, pr:PRADII[f.type], type:f.type, merged:false}));
   score = Math.max(0, Math.min(999999, Math.floor(Number(d.score))||0));
   nextType = (Number.isInteger(d.nextType) && d.nextType>=0 && d.nextType<RADII.length) ? d.nextType : 0;
   lastAimX = Number.isFinite(d.lastAimX) ? d.lastAimX : null;
@@ -788,6 +799,8 @@ function step(){
     for(const f of fruits){ if(f.dying) continue; f.vx *= DAMP; f.vy *= DAMP; }
     for(const f of fruits){
       if(f.dying) continue;
+      // 地板 / 左右墙刻意用「碰撞半径 f.r」而非摆放半径 f.pr：图片按 r 绘制，
+      // 若这里也跟着缩小，画面会陷进地面、或被画布边缘切掉一块。
       if(f.y + f.r > H){ f.y = H - f.r; if(f.vy>0) f.vy = -f.vy * REST_GROUND; f.vx *= GROUND_FRIC; }
       if(f.x - f.r < 0){ f.x = f.r;     if(f.vx<0) f.vx = -f.vx * REST_GROUND; }
       if(f.x + f.r > W){ f.x = W - f.r; if(f.vx>0) f.vx = -f.vx * REST_GROUND; }
@@ -799,11 +812,17 @@ function step(){
         const b=fruits[j]; if(b.merged || b.dying) continue;
         const dx=b.x-a.x, dy=b.y-a.y;
         const d = Math.hypot(dx,dy);
-        const min = a.r + b.r;
+        const min  = a.pr + b.pr;   // 分离/静置用「摆放半径」：两颗水果贴得更紧
+        const mmin = a.r  + b.r;    // 合成判定用「碰撞半径」：判定圈更大，同类靠近即可升级
+        // 合成判定必须独立于碰撞分离：判定圈比静置距离大，若两者共用一个阈值，
+        // 同类水果被推到恰好相切后就永远差浮点一点点，再也合不上（旧版的"挨着却不消融"）。
+        // !a.dying：消散动画中的水果不参与合成（b 侧原本就跳过 dying，a 侧此前漏了，
+        // 判定圈放大后更容易撞上，顺手补齐）
+        if(d>0 && d<mmin && a.type===b.type && !a.dying){ merges.push([a,b]); }
         if(d>0 && d<min){
           const nx=dx/d, ny=dy/d;
           const overlap = min - d;
-          const ma = a.r*a.r, mb = b.r*b.r, tot = ma+mb;
+          const ma = a.pr*a.pr, mb = b.pr*b.pr, tot = ma+mb;
           a.x -= nx * overlap * (mb/tot);
           a.y -= ny * overlap * (mb/tot);
           b.x += nx * overlap * (ma/tot);
@@ -821,7 +840,6 @@ function step(){
             a.vx -= jt*tx/ma; a.vy -= jt*ty/ma;
             b.vx += jt*tx/mb; b.vy += jt*ty/mb;
           }
-          if(a.type===b.type){ merges.push([a,b]); }
         }
       }
     }
@@ -832,7 +850,7 @@ function step(){
         const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
         const nt = a.type+1;
         if(nt < RADII.length){
-          fruits.push({x:mx, y:my, r:RADII[nt], type:nt, vx:(a.vx+b.vx)/4, vy:(a.vy+b.vy)/4, merged:false});
+          fruits.push({x:mx, y:my, r:RADII[nt], pr:PRADII[nt], type:nt, vx:(a.vx+b.vx)/4, vy:(a.vy+b.vy)/4, merged:false});
           const sc = SCORES[nt];
           score += sc; $score.textContent = score;
           // 2.1 去掉合成"+分"飘字——仅保留道具获得飘字，让画面更统一
